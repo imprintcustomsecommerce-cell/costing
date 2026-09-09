@@ -116,6 +116,21 @@ RUN { \
 
 
 # ==========================================
+# Log to the platform, not to a file
+#
+# Laravel's default stack channel writes to storage/logs/laravel.log. Inside a
+# serverless container nobody can open that file, so a failing deploy showed
+# only the web server's own connection chatter and every exception was lost --
+# a 500 with no way to learn what caused it. stderr is what the platform
+# collects, so errors land in the deployment log where they can be read.
+#
+# Overridable from the dashboard like any other setting.
+# ==========================================
+ENV LOG_CHANNEL=stderr
+ENV LOG_LEVEL=debug
+
+
+# ==========================================
 # Precompile Blade views and the route table
 #
 # Neither reads the environment, so both are safe to bake in. (config:cache is
