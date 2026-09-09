@@ -65,7 +65,11 @@ return [
     |
     */
 
-    'timezone' => env('APP_TIMEZONE', 'Asia/Manila'),
+    // Falls back on an empty value as well as a missing one: a hosting
+    // dashboard will happily hand over APP_TIMEZONE set to "", and env()'s own
+    // default only covers the variable being absent, so a blank field reached
+    // date_default_timezone_set('') and warned on every request.
+    'timezone' => env('APP_TIMEZONE') ?: 'Asia/Manila',
 
     /*
     |--------------------------------------------------------------------------
