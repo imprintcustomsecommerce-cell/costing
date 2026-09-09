@@ -1,0 +1,156 @@
+# ==========================================
+# STAGE 1: Build Vite frontend
+# ==========================================
+FROM node:22-alpine AS frontend
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+RUN npm run build
+
+
+# ==========================================
+# STAGE 2: Laravel PHP runtime
+# ==========================================
+FROM php:8.3-cli
+
+WORKDIR /app
+
+# gd is here for dompdf, which renders the quotation PDF.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    unzip \
+    curl \
+    libzip-dev \
+    libonig-dev \
+    libxml2-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+        opcache \
+        pdo_mysql \
+        mbstring \
+        zip \
+        bcmath \
+        gd \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+
+# ==========================================
+# Copy Laravel application
+# ==========================================
+COPY app ./app
+COPY bootstrap ./bootstrap
+COPY config ./config
+COPY database ./database
+COPY public ./public
+COPY resources ./resources
+COPY routes ./routes
+COPY storage ./storage
+
+COPY artisan ./
+COPY composer.json ./
+COPY composer.lock ./
+
+
+# ==========================================
+# Install PHP dependencies
+# ==========================================
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader
+
+
+# ==========================================
+# Copy compiled Vite assets
+# ==========================================
+COPY --from=frontend /app/public/build ./public/build
+
+
+# ==========================================
+# Laravel writable directories
+#
+# The artwork disk lives under storage/app too. On a serverless container that
+# filesystem is scratch space: it is thrown away when the container stops, so
+# uploaded artwork does not survive a deploy or a cold start. Point the artwork
+# disk at object storage before anyone relies on it.
+# ==========================================
+RUN mkdir -p \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    storage/app/private/artwork \
+    bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+
+# ==========================================
+# Keep the compiled PHP in memory
+#
+# Without this every request recompiles the whole framework from source. The
+# code cannot change inside a built image, so there is no reason to keep
+# checking the files for edits.
+# ==========================================
+RUN { \
+        echo 'opcache.enable=1'; \
+        echo 'opcache.enable_cli=1'; \
+        echo 'opcache.validate_timestamps=0'; \
+        echo 'opcache.memory_consumption=192'; \
+        echo 'opcache.max_accelerated_files=20000'; \
+        echo 'opcache.interned_strings_buffer=16'; \
+    } > /usr/local/etc/php/conf.d/opcache.ini
+
+
+# ==========================================
+# Precompile Blade views and the route table
+#
+# Neither reads the environment, so both are safe to bake in. (config:cache is
+# NOT -- it would freeze build-time settings, so it runs at start-up instead.)
+# ==========================================
+RUN php artisan view:cache && php artisan route:cache
+
+
+# ==========================================
+# Bring the schema up to date once, here, rather than on every container start.
+#
+# Non-fatal: if the database is unreachable from the builder, or its
+# credentials are not exposed to the build, the deploy still goes out and the
+# start-up fallback below does the work.
+# ==========================================
+RUN php artisan migrate --force || \
+    echo 'No database at build time - the start command will migrate instead.'
+
+
+# ==========================================
+# Start Laravel
+#
+# Laravel's server.php expects the working directory to be /app/public, and
+# Vercel provides $PORT.
+#
+# THE PORT MUST BE LISTENING WITHIN 15 SECONDS.
+#
+# That is Vercel's startup timeout, and nothing that talks to the database can
+# happen before it: connecting to a hosted database and running the migrations
+# takes far longer than that, and a container killed part way through leaves
+# the schema half-changed with no record that the migration ran.
+#
+# So: config:cache (local files only, fast), then hand the port over
+# immediately and let any migration run behind it. config:cache has to be here
+# rather than at build time because the environment only exists once the
+# container starts.
+# ==========================================
+CMD ["sh", "-c", "php /app/artisan config:cache; { php /app/artisan migrate --force >&2 || echo 'MIGRATION FAILED - serving anyway; schema may be behind the code' >&2; } & cd /app/public && exec php -S 0.0.0.0:${PORT:-80} ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"]
