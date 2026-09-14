@@ -127,12 +127,44 @@ class ErrorPageTest extends TestCase
     {
         // layouts.app reads auth()->user()->name unguarded, so an error page
         // built on it would fatal exactly when the session has gone.
-        foreach (['403', '404', '500', 'shell'] as $code) {
+        foreach (['403', '404', '419', '500', 'shell'] as $code) {
             $this->assertStringNotContainsString(
                 "@extends('layouts.app')",
                 file_get_contents(resource_path("views/errors/{$code}.blade.php")),
                 "errors/{$code} must not depend on the app layout"
             );
         }
+    }
+
+    public function test_the_expired_page_explains_the_wait_rather_than_the_security_check(): void
+    {
+        // The check that fires is a security one, but almost everybody who
+        // sees this simply left a quotation open over lunch. "Forbidden"
+        // teaches them nothing they can act on.
+        $page = view('errors.419', ['exception' => new \RuntimeException('CSRF token mismatch')])->render();
+
+        $this->assertStringContainsString('This page sat open too long', $page);
+        $this->assertStringContainsString('Sign in again', $page);
+        $this->assertStringNotContainsString('CSRF', $page);
+        $this->assertStringNotContainsString('Forbidden', $page);
+    }
+
+    public function test_the_expired_page_names_the_actual_session_lifetime(): void
+    {
+        config(['session.lifetime' => 120]);
+        $this->assertStringContainsString('2 hours', view('errors.419', ['exception' => null])->render());
+
+        config(['session.lifetime' => 30]);
+        $this->assertStringContainsString('30 minutes', view('errors.419', ['exception' => null])->render());
+    }
+
+    public function test_the_expired_page_asks_the_session_for_nothing(): void
+    {
+        // Raised precisely when the session is not what was expected, so it
+        // must not depend on one.
+        $this->assertStringNotContainsString(
+            '@auth',
+            file_get_contents(resource_path('views/errors/419.blade.php'))
+        );
     }
 }
