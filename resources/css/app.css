@@ -332,3 +332,19 @@ th{background:#f1f5f9;color:#64748b}tbody tr:hover{background:#f8fbff}.table-lin
 .quote-totals p{margin:10px 0 0;font-size:12px}
 .quote-totals p+p{margin-top:6px}
 @media(max-width:640px){.quote-totals dl>div{gap:12px}.quote-totals .is-total dd{font-size:22px}}
+
+/* An error page: a dead end made navigable. Centred rather than sitting in the
+   app shell, because the shell's navigation is exactly what the person is not
+   allowed to use. */
+.error-page{display:grid;place-items:center;min-height:100vh;padding:24px;background:var(--bg)}
+.error-card{width:100%;max-width:560px;padding:34px 32px;border:1px solid var(--line);
+    border-radius:16px;background:var(--surface);box-shadow:var(--shadow-sm);text-align:left}
+.error-code{font-size:12px;font-weight:850;letter-spacing:.12em;color:var(--accent)}
+.error-card h1{margin:10px 0 12px;font-size:24px;line-height:1.25}
+.error-card p{margin:0 0 14px;font-size:13px;line-height:1.55}
+.error-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:0 0 16px;
+    padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--surface-soft)}
+.error-meta dt{font-size:10px;font-weight:850;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.error-meta dd{margin:3px 0 0;font-size:14px;color:var(--ink)}
+.error-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+@media(max-width:520px){.error-card{padding:26px 20px}.error-meta{grid-template-columns:1fr}}
