@@ -242,19 +242,14 @@ class QuotationController extends Controller
      */
     private function settle(Quotation $quotation, array $items): void
     {
-        $lines = $this->fillLines($quotation, $items);
-
-        // Layout, the mockup, the client sample and releasing the order happen
-        // once however many pieces are ordered. Charged once here rather than
-        // spread over the pieces, so a run of ten is honestly dearer per piece
-        // than a run of a hundred, and the customer can see why.
-        $setupCost = ProductionStage::setupCost(
-            $quotation->items()->pluck('print_type')->all()
-        );
-        $margin = Setting::margin();
-        $setup = round($margin > 0 ? $setupCost / (1 - ($margin / 100)) : $setupCost, 2);
-
-        $subtotal = round($lines + $setup, 2);
+        // A quotation is the sum of its lines. What a piece costs to make -
+        // materials, printing, labour, packaging - is held on the product, so
+        // there is nothing left to charge once per job on top.
+        //
+        // setup_cost is written as nought rather than dropped: quotations
+        // raised while a separate setup charge existed keep the figure they
+        // were given, and still show it.
+        $subtotal = round($this->fillLines($quotation, $items), 2);
 
         $surcharge = RushTier::surchargeFor($this->daysUntil($quotation->deadline));
         $rush = round($subtotal * ($surcharge / 100), 2);
@@ -265,7 +260,7 @@ class QuotationController extends Controller
             // priced: an edit re-quotes at today's costs, so it is today the
             // clock should run from.
             'valid_until' => $this->validUntil(),
-            'setup_cost' => $setup,
+            'setup_cost' => 0,
             'subtotal' => $subtotal,
             'rush_percentage' => $surcharge,
             'rush_amount' => $rush,
@@ -507,18 +502,20 @@ class QuotationController extends Controller
                     // (materials + printing + labour + packaging). Legacy
                     // products still add their stage labour separately below.
                     'materials' => round($costing['retail'], 2),
+                    // What the recipe alone comes to, which is what decides
+                    // whether this product can be quoted at all.
+                    'material_cost' => round($costing['material_retail'], 2),
                     'materials_per_cm2' => $this->areaRate($product, 'retail'),
                     'print_type' => $product->print_type,
                     'print_type_label' => ProductionPipeline::label($product->print_type),
                     'labour' => $product->usesCostBreakdown()
                         ? 0.0
                         : round(ProductionStage::perPieceCost($product->print_type), 2),
-                    'setup' => round(ProductionStage::setupCost([$product->print_type]), 2),
                     'needs_artwork' => $product->requiresArtworkSize(),
                 ];
             })
             ->filter(fn (array $product) => filled($product['print_type'])
-                && ($product['bulk'] > 0 || $product['materials'] > 0 || $product['needs_artwork']))
+                && ($product['material_cost'] > 0 || $product['needs_artwork']))
             ->values();
     }
 }

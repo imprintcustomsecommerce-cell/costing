@@ -1189,13 +1189,13 @@ class QuotationTest extends TestCase
         ])->assertSessionHasErrors('print_type');
     }
 
-    public function test_the_once_per_job_stages_are_charged_once_as_setup(): void
+    public function test_a_quotation_is_the_sum_of_its_lines(): void
     {
         $this->user();
+        // Per-job stage rates are no longer charged: what a piece costs to
+        // make is held on the product, so there is nothing to add once per job.
         $this->stageRate('layout', 200);
-        $this->stageRate('mockup', 150);
         $this->stageRate('sample', 100);
-        $this->stageRate('release', 50);
         $this->stageRate('sewing', 10);
         $product = $this->product('SETUP', bulk: 40, retail: 40);
 
@@ -1206,13 +1206,13 @@ class QuotationTest extends TestCase
 
         $quotation = Quotation::sole();
 
-        // Ten pieces at 50 each is 500, plus 500 of setup charged once.
-        $this->assertEqualsWithDelta(500.00, (float) $quotation->setup_cost, 0.01);
-        $this->assertEqualsWithDelta(1000.00, (float) $quotation->subtotal, 0.01);
-        $this->assertEqualsWithDelta(1000.00, (float) $quotation->total, 0.01);
+        // Ten pieces at 50 each, and nothing on top.
+        $this->assertEqualsWithDelta(0.0, (float) $quotation->setup_cost, 0.01);
+        $this->assertEqualsWithDelta(500.00, (float) $quotation->subtotal, 0.01);
+        $this->assertEqualsWithDelta(500.00, (float) $quotation->total, 0.01);
     }
 
-    public function test_setup_makes_a_small_run_dearer_per_piece_than_a_large_one(): void
+    public function test_a_small_run_costs_the_same_per_piece_as_a_large_one(): void
     {
         $this->user();
         $this->stageRate('layout', 500);
@@ -1222,25 +1222,21 @@ class QuotationTest extends TestCase
             'customer_name' => 'Ten pieces',
             'items' => [['product_id' => $product->id, 'quantity' => 10]],
         ])->assertSessionHasNoErrors();
-
         $small = Quotation::latest('id')->first();
-        $smallEach = (float) $small->total / 10;
 
         $this->post('/quotations', [
             'customer_name' => 'A hundred pieces',
             'items' => [['product_id' => $product->id, 'quantity' => 100]],
         ])->assertSessionHasNoErrors();
-
         $large = Quotation::latest('id')->first();
-        $largeEach = (float) $large->total / 100;
 
-        // The same 500 of layout spread over ten pieces or a hundred.
-        $this->assertEqualsWithDelta(100.00, $smallEach, 0.01);
-        $this->assertEqualsWithDelta(55.00, $largeEach, 0.01);
-        $this->assertGreaterThan($largeEach, $smallEach);
+        // Without a per-job charge the run size changes nothing per piece.
+        // Only a volume discount can, and none is configured here.
+        $this->assertEqualsWithDelta(50.00, (float) $small->total / 10, 0.01);
+        $this->assertEqualsWithDelta(50.00, (float) $large->total / 100, 0.01);
     }
 
-    public function test_two_lines_do_not_buy_two_layouts(): void
+    public function test_mixing_products_adds_no_charge_of_its_own(): void
     {
         $this->user();
         $this->stageRate('layout', 300);
@@ -1255,15 +1251,21 @@ class QuotationTest extends TestCase
             ],
         ])->assertSessionHasNoErrors();
 
-        // One quotation, one layout, whatever routes it mixes.
-        $this->assertEqualsWithDelta(300.00, (float) Quotation::sole()->setup_cost, 0.01);
+        $quotation = Quotation::sole();
+        $this->assertEqualsWithDelta(0.0, (float) $quotation->setup_cost, 0.01);
+        $this->assertEqualsWithDelta(100.00, (float) $quotation->total, 0.01);
     }
 
-    public function test_setup_carries_the_margin_like_everything_else(): void
+    public function test_a_per_job_stage_rate_left_in_the_table_charges_nothing(): void
     {
         $this->user();
         Setting::create(['key' => 'default_margin', 'value' => '50']);
+        // The rows survive for products still on the legacy per-piece path.
+        // Nothing should reach a quotation from the per-job ones.
         $this->stageRate('layout', 100);
+        $this->stageRate('mockup', 100);
+        $this->stageRate('sample', 100);
+        $this->stageRate('release', 100);
         $product = $this->product('SETUPMARGIN', bulk: 25, retail: 25);
 
         $this->post('/quotations', [
@@ -1272,13 +1274,11 @@ class QuotationTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $quotation = Quotation::sole();
-
-        // 100 of setup at a 50% margin sells at 200, like the 25 sells at 50.
-        $this->assertEqualsWithDelta(200.00, (float) $quotation->setup_cost, 0.01);
-        $this->assertEqualsWithDelta(250.00, (float) $quotation->total, 0.01);
+        $this->assertEqualsWithDelta(0.0, (float) $quotation->setup_cost, 0.01);
+        $this->assertEqualsWithDelta(50.00, (float) $quotation->total, 0.01);
     }
 
-    public function test_the_rush_fee_is_charged_on_the_setup_too(): void
+    public function test_the_rush_fee_is_charged_on_the_lines(): void
     {
         $this->user();
         $this->rushTier(7, 25);
@@ -1293,10 +1293,10 @@ class QuotationTest extends TestCase
 
         $quotation = Quotation::sole();
 
-        // A rushed job rushes its layout too: 200 subtotal, a quarter on top.
-        $this->assertEqualsWithDelta(200.00, (float) $quotation->subtotal, 0.01);
-        $this->assertEqualsWithDelta(50.00, (float) $quotation->rush_amount, 0.01);
-        $this->assertEqualsWithDelta(250.00, (float) $quotation->total, 0.01);
+        // 100 of line, a quarter on top, and no per-job charge to rush.
+        $this->assertEqualsWithDelta(100.00, (float) $quotation->subtotal, 0.01);
+        $this->assertEqualsWithDelta(25.00, (float) $quotation->rush_amount, 0.01);
+        $this->assertEqualsWithDelta(125.00, (float) $quotation->total, 0.01);
     }
 
     public function test_a_line_snapshots_the_route_it_was_quoted_on(): void
@@ -1356,10 +1356,9 @@ class QuotationTest extends TestCase
         );
     }
 
-    public function test_the_quotation_shows_the_setup_it_charged(): void
+    public function test_a_quotation_raised_before_setup_was_dropped_still_shows_it(): void
     {
         $this->user();
-        $this->stageRate('layout', 300);
         $product = $this->product('SHOWSETUP', bulk: 50, retail: 50);
 
         $this->post('/quotations', [
@@ -1367,11 +1366,12 @@ class QuotationTest extends TestCase
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
         ])->assertSessionHasNoErrors();
 
-        $this->get('/quotations/'.Quotation::sole()->id)
-            ->assertOk()
-            ->assertSee('Setup')
-            ->assertSee('DTF')
-            ->assertSee('300.00');
+        $quotation = Quotation::sole();
+        $this->get('/quotations/'.$quotation->id)->assertOk()->assertDontSee('Setup');
+
+        // Older quotations keep the figure they were given, and say so.
+        $quotation->forceFill(['setup_cost' => 300, 'subtotal' => 350, 'total' => 350])->save();
+        $this->get('/quotations/'.$quotation->id)->assertOk()->assertSee('Setup')->assertSee('300.00');
     }
 
     public function test_the_picker_names_each_product_and_its_route(): void
@@ -1389,17 +1389,18 @@ class QuotationTest extends TestCase
     public function test_the_summary_totals_do_not_share_a_hook_with_the_product_options(): void
     {
         $this->user();
-        $this->stageRate('layout', 300);
         $this->product('HOOK-TEE', bulk: 50, retail: 50);
 
-        // The options carry each product's stage figures and the summary
-        // carries the quotation's. Sharing an attribute made the browser write
-        // the setup total into the first product's name.
+        // The options carry each product's own figures and the summary carries
+        // the quotation's. Sharing an attribute once made the browser write a
+        // total into the first product's name.
         $page = $this->get('/quotations/create')->assertOk()->getContent();
 
-        $this->assertStringContainsString('data-stage-setup=', $page);
-        $this->assertStringContainsString('data-setup-total', $page);
-        $this->assertStringNotContainsString('data-setup="', $page);
+        $this->assertStringContainsString('data-stage-labour=', $page);
+        $this->assertStringContainsString('data-subtotal>', $page);
+        // The summary hook must never also be an attribute on an option.
+        $this->assertStringNotContainsString('data-subtotal="', $page);
+        $this->assertStringNotContainsString('data-total="', $page);
     }
 
     public function test_a_quotation_stands_for_the_validity_days_in_settings(): void

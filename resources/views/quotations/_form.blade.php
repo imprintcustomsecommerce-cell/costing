@@ -54,7 +54,6 @@
                                 data-materials="{{ $product['materials'] }}"
                                 data-materials-per-cm2="{{ $product['materials_per_cm2'] }}"
                                 data-stage-labour="{{ $product['labour'] }}"
-                                data-stage-setup="{{ $product['setup'] }}"
                                 data-needs-artwork="{{ $product['needs_artwork'] ? '1' : '' }}">{{ $product['sku'] }} — {{ $product['name'] }} ({{ $product['print_type_label'] }})</option>
                         @endforeach
                     </select>
@@ -90,10 +89,6 @@
 
     <div class="quote-totals">
         <dl>
-            <div data-setup-row hidden>
-                <dt>Setup <small>layout, mockup, sample, release — once per job</small></dt>
-                <dd data-setup-total>₱0.00</dd>
-            </div>
             <div data-subtotal-row hidden>
                 <dt>Subtotal</dt>
                 <dd data-subtotal>₱0.00</dd>
@@ -107,8 +102,8 @@
                 <dd data-total>₱0.00</dd>
             </div>
         </dl>
-        <p class="muted">New products use the saved product breakdown: materials + printing + labor + packaging. Older products that have not been resaved still use their production stages. Layout, mockup, sample and release remain charged once as setup.</p>
-        <p class="muted">@if($validityDays > 0)This price stands for {{ $validityDays }} {{ \Illuminate\Support\Str::plural('day', $validityDays) }} from today.@endif Print type and per-piece costs are set on the product; setup stage rates remain in Settings. Anything printed on film or vinyl is costed by the artwork size.@if($breaks->isNotEmpty()) Volume discounts start at {{ (int) $breaks->last()['min'] }} pieces.@endif</p>
+        <p class="muted">New products use the saved product breakdown: materials + printing + labor + packaging. Older products that have not been resaved still use their production stages.</p>
+        <p class="muted">@if($validityDays > 0)This price stands for {{ $validityDays }} {{ \Illuminate\Support\Str::plural('day', $validityDays) }} from today.@endif Print type and per-piece costs are set on the product. Anything printed on film or vinyl is costed by the artwork size.@if($breaks->isNotEmpty()) Volume discounts start at {{ (int) $breaks->last()['min'] }} pieces.@endif</p>
     </div>
 
     <label class="field-block">Notes <span class="cost-helper-optional">optional</span><textarea name="notes">{{ old('notes', $editing ? $quotation->notes : '') }}</textarea></label>
@@ -235,30 +230,13 @@ document.addEventListener('DOMContentLoaded', () => {
             row.querySelector('[data-line]').textContent = peso(line);
         }
 
-        /* Layout, the mockup, the sample and releasing the order happen once
-           however many pieces are ordered, so the routes on the quotation are
-           unioned and charged once -- the same rule the server applies. */
-        /* Every route runs the same once-per-job stages, so a quotation pays a
-           single setup however many products it mixes -- two lines do not buy
-           two layouts. Taking the largest is the union of identical sets. */
-        const setupCost = rows.reduce((most, r) => {
-            const option = r.querySelector('[data-product]').selectedOptions[0];
-            return Math.max(most, option ? (parseFloat(option.dataset.stageSetup) || 0) : 0);
-        }, 0);
-        const setup = Math.round((margin > 0 && margin < 100 ? setupCost / (1 - margin / 100) : setupCost) * 100) / 100;
-        total += setup;
-
-        const setupRow = document.querySelector('[data-setup-row]');
-        setupRow.hidden = setup <= 0;
-        document.querySelector('[data-setup-total]').textContent = peso(setup);
-
         /* Turnaround is charged on the subtotal, not on each unit price: it is
            what the deadline costs, not what a piece is worth. */
         const deadline = document.querySelector('[data-deadline]');
         const surcharge = rushFor(deadline ? deadline.value : '');
         const rush = Math.round(total * (surcharge / 100) * 100) / 100;
 
-        document.querySelector('[data-subtotal-row]').hidden = surcharge <= 0 && setup <= 0;
+        document.querySelector('[data-subtotal-row]').hidden = surcharge <= 0;
         document.querySelector('[data-rush-row]').hidden = surcharge <= 0;
         document.querySelector('[data-subtotal]').textContent = peso(total);
         document.querySelector('[data-rush-label]').textContent =

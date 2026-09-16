@@ -22,6 +22,6 @@ If you are installing this source-only archive on a fresh machine, also run the 
 
 ## Existing products
 
-The new migration snapshots the old per-piece production-stage cost of existing products into the new product-level fields so current prices do not suddenly change. Per-job setup stages remain in Settings and continue to be charged once per quotation.
+The new migration snapshots the old per-piece production-stage cost of existing products into the new product-level fields so current prices do not suddenly change. The per-job setup charge is gone: a quotation is the sum of its lines, since what a piece costs to make is now held on the product. Quotations raised while that charge existed keep the figure they were given and still show it.
 
 Products created or resaved from the updated Product form use the new product-level breakdown. The older per-piece stage system remains only as a fallback for legacy integrations that create products without using the Product form.

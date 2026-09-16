@@ -57,10 +57,4 @@ class Setting extends Model
 
         return $floor > 0 && $floor < 100 ? $floor : 0.0;
     }
-
-    /** What the work on one piece costs, the same for every job in the shop. */
-    public static function labourPerPiece(): float
-    {
-        return max(0.0, self::number('default_labour_cost'));
-    }
 }

@@ -51,24 +51,6 @@ class ProductionStage extends Model
         return self::sumOf(ProductionPipeline::stagesOfBasis($printType, ProductionPipeline::PER_PIECE));
     }
 
-    /**
-     * What the once-per-job stages cost: layout, the mockup, the sample and
-     * releasing the order.
-     *
-     * @param  array<int, string|null>  $printTypes  every route on the quotation
-     */
-    public static function setupCost(array $printTypes): float
-    {
-        // A quotation is laid out, sampled and released once, however many
-        // routes it mixes, so the stages are unioned rather than added up per
-        // line.
-        $stages = collect($printTypes)
-            ->flatMap(fn (?string $type) => ProductionPipeline::stagesOfBasis($type, ProductionPipeline::PER_JOB))
-            ->unique()
-            ->all();
-
-        return self::sumOf($stages);
-    }
 
     /** @param  array<int, string>  $stages */
     private static function sumOf(array $stages): float
@@ -78,25 +60,4 @@ class ProductionStage extends Model
         return collect($stages)->sum(fn (string $key) => (float) ($rates[$key] ?? 0));
     }
 
-    /**
-     * The stages of a route with what each costs, for showing a breakdown.
-     *
-     * @return array<int, array{key: string, label: string, basis: string, rate: float}>
-     */
-    public static function breakdown(?string $printType): array
-    {
-        $rates = self::rates();
-        $stages = ProductionPipeline::stages();
-
-        return collect(ProductionPipeline::stagesFor($printType))
-            ->map(fn (string $key) => [
-                'key' => $key,
-                'label' => $stages[$key]['label'] ?? $key,
-                'basis' => $stages[$key]['basis'] ?? ProductionPipeline::PER_PIECE,
-                'rate' => (float) ($rates[$key] ?? 0),
-            ])
-            ->sortBy('sequence')
-            ->values()
-            ->all();
-    }
 }
