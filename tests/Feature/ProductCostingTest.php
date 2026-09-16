@@ -94,13 +94,14 @@ class ProductCostingTest extends TestCase
         $this->post('/admin/products', [
             'sku' => 'QTY-TEE', 'name' => 'Quantity Tee',
             'product_category_id' => $category->id,
+            'print_type' => 'dtf', 'printing_cost' => 5,
             'materials' => [$blank->id],
             'material_quantities' => [$blank->id => 3],
         ])->assertSessionHasNoErrors()->assertRedirect();
 
         $product = Product::where('sku', 'QTY-TEE')->sole();
         $this->assertEqualsWithDelta(3.0, (float) $product->materials->first()->pivot->quantity, 0.001);
-        $this->assertEqualsWithDelta(195.00, $product->costing()['bulk'], 0.001);
+        $this->assertEqualsWithDelta(195.00, $product->costing()['material_bulk'], 0.001);
     }
 
     public function test_a_missing_quantity_counts_as_one_rather_than_zero(): void
@@ -113,11 +114,12 @@ class ProductCostingTest extends TestCase
         $this->post('/admin/products', [
             'sku' => 'NO-QTY', 'name' => 'No Quantity',
             'product_category_id' => $category->id,
+            'print_type' => 'dtf', 'printing_cost' => 5,
             'materials' => [$blank->id],
         ])->assertSessionHasNoErrors();
 
         $product = Product::where('sku', 'NO-QTY')->sole();
-        $this->assertEqualsWithDelta(50.00, $product->costing()['bulk'], 0.001);
+        $this->assertEqualsWithDelta(50.00, $product->costing()['material_bulk'], 0.001);
     }
 
     public function test_the_form_offers_a_quantity_and_a_running_total(): void
@@ -376,4 +378,36 @@ class ProductCostingTest extends TestCase
             ->assertSee('data-per-cm2="10000"', false)
             ->assertSee('by artwork size');
     }
+
+    public function test_the_product_form_saves_the_complete_cost_breakdown(): void
+    {
+        $this->admin();
+        $fabric = $this->material('BREAKDOWN-FABRIC', bulk: 65, retail: 80);
+        $category = ProductCategory::firstOrCreate(['slug' => 'apparel'], ['name' => 'Apparel']);
+
+        $this->post('/admin/products', [
+            'sku' => 'BREAKDOWN-TEE', 'name' => 'Breakdown Tee',
+            'product_category_id' => $category->id,
+            'materials' => [$fabric->id],
+            'material_quantities' => [$fabric->id => 1],
+            'print_type' => 'silkscreen',
+            'printing_cost' => 25,
+            'production_cost' => 30,
+            'sewing_cost' => 20,
+            'plastic_cost' => 3,
+            'box_cost' => 5,
+            'sticker_cost' => 1,
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $product = Product::where('sku', 'BREAKDOWN-TEE')->sole();
+        $costing = $product->costing();
+
+        $this->assertTrue($product->usesCostBreakdown());
+        $this->assertEqualsWithDelta(80.00, $costing['material_retail'], 0.001);
+        $this->assertEqualsWithDelta(25.00, $costing['printing'], 0.001);
+        $this->assertEqualsWithDelta(50.00, $costing['labour'], 0.001);
+        $this->assertEqualsWithDelta(9.00, $costing['packaging'], 0.001);
+        $this->assertEqualsWithDelta(164.00, $costing['retail'], 0.001);
+    }
+
 }

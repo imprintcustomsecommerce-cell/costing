@@ -1336,16 +1336,24 @@ class QuotationTest extends TestCase
         $this->assertSame('silkscreen', $copy->items->sole()->print_type);
     }
 
-    public function test_stage_rates_are_saved_from_the_settings_form(): void
+    public function test_the_settings_screen_no_longer_edits_per_piece_stage_rates(): void
     {
         $this->user();
 
+        // Per-piece work is costed on the product now - printing, production,
+        // sewing and packaging - so the stage rate boxes are gone. Posting
+        // them must not quietly write anything.
+        $this->stageRate('sewing', 10);
+
         $this->put('/admin/settings', $this->settingsPayload([
-            'stages' => ['layout' => 250, 'sewing' => 12.5],
+            'stages' => ['sewing' => 999],
         ]))->assertSessionHasNoErrors();
 
-        $this->assertEqualsWithDelta(250.0, (float) ProductionStage::where('key', 'layout')->sole()->rate, 0.01);
-        $this->assertEqualsWithDelta(12.5, (float) ProductionStage::where('key', 'sewing')->sole()->rate, 0.01);
+        $this->assertEqualsWithDelta(
+            10.0,
+            (float) ProductionStage::where('key', 'sewing')->sole()->rate,
+            0.01
+        );
     }
 
     public function test_the_quotation_shows_the_setup_it_charged(): void
@@ -1498,4 +1506,34 @@ class QuotationTest extends TestCase
             ->assertOk()
             ->assertSee('This price stands for 15 days from today.');
     }
+
+    public function test_a_new_product_breakdown_is_not_charged_stage_labour_twice(): void
+    {
+        $this->user();
+        $this->labourDefault(100);
+        $product = $this->product('DIRECT-COST', bulk: 65, retail: 80, printType: 'silkscreen');
+        $product->update([
+            'costing_mode' => 'product_breakdown',
+            'printing_cost' => 20,
+            'production_cost' => 10,
+            'sewing_cost' => 15,
+            'plastic_cost' => 2,
+            'box_cost' => 2,
+            'sticker_cost' => 1,
+        ]);
+
+        $this->post('/quotations', [
+            'customer_name' => 'Breakdown Buyer',
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertSessionHasNoErrors();
+
+        $item = Quotation::with('items')->sole()->items->sole();
+
+        // 80 material + 20 printing + 25 labour + 5 packaging = 130.
+        // The legacy 100-peso sewing stage must not be added again.
+        $this->assertEqualsWithDelta(25.00, (float) $item->labour_cost, 0.01);
+        $this->assertEqualsWithDelta(130.00, (float) $item->unit_cost, 0.01);
+        $this->assertEqualsWithDelta(130.00, (float) $item->unit_price, 0.01);
+    }
+
 }

@@ -5,7 +5,7 @@
     <div>
         <div class="page-kicker">System administration</div>
         <h1>System settings</h1>
-        <div class="muted">Company identity, quotation defaults, currency, margin protection, and tax</div>
+        <div class="muted">Company identity, margin protection, volume discounts, and rush fees</div>
     </div>
 </div>
 
@@ -25,35 +25,10 @@
     </div>
 
     <div class="form-section">
-        <div class="page-kicker">Quotation defaults</div>
-        <div class="form-grid form-grid-three">
-            <label>Currency<input name="currency" value="{{ $v('currency','PHP') }}" required></label>
-            <label>Quotation prefix<input name="quotation_prefix" value="{{ $v('quotation_prefix','QT') }}" required></label>
-            <label>Validity (days)<input name="quotation_validity_days" type="number" value="{{ $v('quotation_validity_days',15) }}" required></label>
-            <label>Default margin (%)<input name="default_margin" type="number" step=".01" value="{{ $v('default_margin') }}"></label>
-            <label>Minimum gross margin (%)<input name="minimum_gross_margin" type="number" step=".01" value="{{ $v('minimum_gross_margin',30) }}" required></label>
-            <label>Default labour per piece (₱)<input name="default_labour_cost" type="number" step=".01" min="0" value="{{ $v('default_labour_cost',0) }}"></label>
-        </div>
-    </div>
-
-    <div class="form-section">
-        <div class="page-kicker">Tax configuration</div>
-        <div class="form-grid form-grid-three">
-            <label>Tax enabled<select name="tax_enabled"><option value="0" @selected(!$v('tax_enabled',0))>No</option><option value="1" @selected($v('tax_enabled',0))>Yes</option></select></label>
-            <label>Tax rate (%)<input name="tax_rate" type="number" step=".01" value="{{ $v('tax_rate',0) }}" required></label>
-            <label>Tax inclusive<select name="tax_inclusive"><option value="0" @selected(!$v('tax_inclusive',0))>No</option><option value="1" @selected($v('tax_inclusive',0))>Yes</option></select></label>
-        </div>
-    </div>
-
-    <div class="form-section">
-        <div class="page-kicker">Production stages</div>
-        <p class="muted">What each stage of the floor costs. A line on a quotation pays for the stages its print type actually runs — a full sublimation job runs laser cutting and the roller press, a DTF job runs neither. <b>Per piece</b> stages are charged on every piece; <b>per job</b> stages happen once however many pieces are ordered and are charged as setup, which is what makes a small run dearer per piece.</p>
-        <div class="grid" style="grid-template-columns:repeat(3,1fr)">
-            @foreach($stages as $stage)
-                <label>{{ $stage->label }} <span class="cost-helper-optional">{{ $stage->basis === 'per_job' ? 'per job' : 'per piece' }}</span>
-                    <input name="stages[{{ $stage->key }}]" type="number" step=".01" min="0" value="{{ rtrim(rtrim(number_format((float) $stage->rate, 2, '.', ''), '0'), '.') }}">
-                </label>
-            @endforeach
+        <div class="page-kicker">Margin settings</div>
+        <div class="form-grid">
+            <label>Default margin (%)<input name="default_margin" type="number" step=".01" min="0.01" max="99.99" value="{{ $v('default_margin') }}"></label>
+            <label>Minimum gross margin (%)<input name="minimum_gross_margin" type="number" step=".01" min="0" max="99.99" value="{{ $v('minimum_gross_margin',30) }}" required></label>
         </div>
     </div>
 

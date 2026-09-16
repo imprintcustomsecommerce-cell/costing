@@ -36,7 +36,7 @@
 
     <div class="form-section">
         <div class="section-title-row">
-            <div><h3>Products</h3><p class="muted">Add a line per product. Only products with priced materials are listed.</p></div>
+            <div><h3>Products</h3><p class="muted">Add a line per product. Only products with a priced material recipe and print method are listed.</p></div>
         </div>
 
         <div id="quotation-lines"></div>
@@ -107,8 +107,8 @@
                 <dd data-total>₱0.00</dd>
             </div>
         </dl>
-        <p class="muted">Each line costs its materials plus the production stages its print type runs — printing, cutting, pressing, pairing, sewing, QC and inventory. Layout, mockup, sample and release are charged once, as setup.</p>
-        <p class="muted">@if($validityDays > 0)This price stands for {{ $validityDays }} {{ \Illuminate\Support\Str::plural('day', $validityDays) }} from today.@endif Print type is set on the product; stage rates in Settings. Anything printed on film or vinyl is costed by the artwork size.@if($breaks->isNotEmpty()) Volume discounts start at {{ (int) $breaks->last()['min'] }} pieces.@endif</p>
+        <p class="muted">New products use the saved product breakdown: materials + printing + labor + packaging. Older products that have not been resaved still use their production stages. Layout, mockup, sample and release remain charged once as setup.</p>
+        <p class="muted">@if($validityDays > 0)This price stands for {{ $validityDays }} {{ \Illuminate\Support\Str::plural('day', $validityDays) }} from today.@endif Print type and per-piece costs are set on the product; setup stage rates remain in Settings. Anything printed on film or vinyl is costed by the artwork size.@if($breaks->isNotEmpty()) Volume discounts start at {{ (int) $breaks->last()['min'] }} pieces.@endif</p>
     </div>
 
     <label class="field-block">Notes <span class="cost-helper-optional">optional</span><textarea name="notes">{{ old('notes', $editing ? $quotation->notes : '') }}</textarea></label>
@@ -127,7 +127,7 @@
 
 <script>
 /* Line prices shown here are a preview of what the server will compute from the
-   product's materials, its labour and the volume breaks. The form never posts a
+   product's saved unit-cost breakdown and the volume breaks. The form never posts a
    price -- only which product and how many -- so what is stored cannot be
    edited from the browser. */
 document.addEventListener('DOMContentLoaded', () => {
@@ -200,8 +200,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 area += (parseFloat(extraWidth.value) || 0) * (parseFloat(extraHeight.value) || 0);
             });
 
-            /* Materials, then the minutes actually typed on this line, then
-               the margin -- the same order the server costs it in. */
+            /* The fixed product cost, then any artwork-sized material, then
+               legacy stage labour when an older product still uses it. */
             let cost = chosen ? parseFloat(chosen.dataset.materials || 0) : 0;
             if (needsArtwork) cost += area * parseFloat(chosen.dataset.materialsPerCm2 || 0);
 

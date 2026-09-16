@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\ProductionStage;
 use App\Models\QuantityBreak;
 use App\Models\RushTier;
 use App\Models\Setting;
@@ -12,7 +11,7 @@ use Illuminate\Http\Request;
 
 class SettingController extends Controller
 {
-    private const FIELDS = ['company_name', 'company_address', 'company_phone', 'company_email', 'company_website', 'quotation_validity_days', 'currency', 'tax_enabled', 'tax_rate', 'tax_inclusive', 'quotation_prefix', 'default_margin', 'minimum_gross_margin', 'default_labour_cost'];
+    private const FIELDS = ['company_name', 'company_address', 'company_phone', 'company_email', 'company_website', 'default_margin', 'minimum_gross_margin'];
 
     public function edit()
     {
@@ -20,17 +19,16 @@ class SettingController extends Controller
             'settings' => Setting::whereIn('key', self::FIELDS)->pluck('value', 'key'),
             'breaks' => QuantityBreak::orderBy('min_quantity')->get(),
             'rushTiers' => RushTier::orderBy('within_days')->get(),
-            'stages' => ProductionStage::orderBy('sequence')->orderBy('label')->get(),
         ]);
     }
 
     public function update(Request $r, AuditService $audit)
     {
-        $data = $r->validate(['company_name' => 'required|string|max:255', 'company_address' => 'nullable|string', 'company_phone' => 'nullable|string|max:50', 'company_email' => 'nullable|email', 'company_website' => 'nullable|url', 'quotation_validity_days' => 'required|integer|min:1|max:365', 'currency' => 'required|string|max:8', 'tax_enabled' => 'required|boolean', 'tax_rate' => 'required|numeric|min:0|max:100', 'tax_inclusive' => 'required|boolean', 'quotation_prefix' => 'required|string|max:10', 'default_margin' => 'nullable|numeric|min:0.01|max:99.99', 'minimum_gross_margin' => 'required|numeric|min:0|max:99.99', 'default_labour_cost' => 'nullable|numeric|min:0|max:1000000']);
+        $data = $r->validate(['company_name' => 'required|string|max:255', 'company_address' => 'nullable|string', 'company_phone' => 'nullable|string|max:50', 'company_email' => 'nullable|email', 'company_website' => 'nullable|url', 'default_margin' => 'nullable|numeric|min:0.01|max:99.99', 'minimum_gross_margin' => 'required|numeric|min:0|max:99.99']);
         foreach (self::FIELDS as $key) {
             $setting = Setting::firstOrNew(['key' => $key]);
             $old = $setting->value;
-            $setting->fill(['value' => (string) ($data[$key] ?? ''), 'type' => in_array($key, ['tax_enabled', 'tax_inclusive']) ? 'boolean' : (is_numeric($data[$key] ?? null) ? 'decimal' : 'string'), 'group' => 'company', 'label' => ucwords(str_replace('_', ' ', $key))])->save();
+            $setting->fill(['value' => (string) ($data[$key] ?? ''), 'type' => is_numeric($data[$key] ?? null) ? 'decimal' : 'string', 'group' => 'company', 'label' => ucwords(str_replace('_', ' ', $key))])->save();
             if ($old !== $setting->value) {
                 $audit->log('setting_changed', $setting, ['value' => $old], ['value' => $setting->value], $key);
             }
@@ -38,35 +36,8 @@ class SettingController extends Controller
 
         $this->syncBreaks($r, $audit);
         $this->syncRushTiers($r, $audit);
-        $this->syncStageRates($r, $audit);
 
         return back()->with('success', 'System settings saved.');
-    }
-
-    /**
-     * Save what each stage of the floor costs.
-     *
-     * The stages themselves come from the production pipeline and cannot be
-     * added or removed here - only what they cost. A stage left blank costs
-     * nothing, which is how a shop that does not run a stage prices it.
-     */
-    private function syncStageRates(Request $r, AuditService $audit): void
-    {
-        $rates = $r->validate([
-            'stages' => 'nullable|array',
-            'stages.*' => 'nullable|numeric|min:0|max:1000000',
-        ])['stages'] ?? [];
-
-        $before = ProductionStage::orderBy('key')->pluck('rate', 'key')->all();
-
-        foreach ($rates as $key => $rate) {
-            ProductionStage::where('key', $key)->update(['rate' => (float) ($rate ?: 0)]);
-        }
-
-        $after = ProductionStage::orderBy('key')->pluck('rate', 'key')->all();
-        if ($before !== $after) {
-            $audit->log('stage_rates_changed', new ProductionStage, $before, $after, 'Production stage rates');
-        }
     }
 
     /**

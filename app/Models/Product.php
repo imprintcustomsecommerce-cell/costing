@@ -17,7 +17,15 @@ class Product extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'is_active' => 'boolean',
+            'printing_cost' => 'decimal:4',
+            'production_cost' => 'decimal:4',
+            'sewing_cost' => 'decimal:4',
+            'plastic_cost' => 'decimal:4',
+            'box_cost' => 'decimal:4',
+            'sticker_cost' => 'decimal:4',
+        ];
     }
 
     public function category(): BelongsTo
@@ -50,14 +58,14 @@ class Product extends Model
     }
 
     /**
-     * What this product costs, from its materials alone.
+     * What one finished unit costs.
      *
-     * Labour is not here. What the work on a piece costs is the shop's figure,
-     * not the product's, and folding it in here would make a product with no
-     * materials at all look as though it cost something - which is exactly the
-     * case a quotation has to refuse.
+     * New products use a four-part product breakdown: materials, printing,
+     * labour and packaging. Legacy products keep the old behaviour until they
+     * are saved through the new product form, so old automated integrations do
+     * not suddenly double-charge the production-stage rates.
      *
-     * Two kinds of material, costed differently:
+     * Two kinds of material are costed differently:
      *
      * Counted, weighed or measured by length — a blank, a bag, thread. Its
      * quantity is fixed: one shirt is one shirt whatever is printed on it.
@@ -106,16 +114,65 @@ class Product extends Model
             $lines[] = $line;
         }
 
+        $materialBulk = $bulk;
+        $materialRetail = $retail;
+        $components = $this->componentCosts();
+
+        if ($this->usesCostBreakdown()) {
+            $bulk += $components['total'];
+            $retail += $components['total'];
+        }
+
         $difference = $retail - $bulk;
 
-        return [
+        $result = [
             'lines' => $lines,
+            'material_bulk' => $materialBulk,
+            'material_retail' => $materialRetail,
+            'components' => $components,
             'bulk' => $bulk,
             'retail' => $retail,
             'difference' => $difference,
             'markup_percentage' => $bulk > 0 ? ($difference / $bulk) * 100 : 0.0,
             'missing_artwork' => $missingArtwork,
         ];
+
+        if ($this->usesCostBreakdown()) {
+            $result += [
+                'printing' => $components['printing'],
+                'labour' => $components['labour'],
+                'packaging' => $components['packaging'],
+            ];
+        }
+
+        return $result;
+    }
+
+    public function usesCostBreakdown(): bool
+    {
+        return $this->costing_mode === 'product_breakdown';
+    }
+
+    /** @return array{printing: float, labour: float, packaging: float, total: float} */
+    public function componentCosts(): array
+    {
+        $printing = (float) ($this->printing_cost ?? 0);
+        $labour = $this->labourCost();
+        $packaging = (float) ($this->plastic_cost ?? 0)
+            + (float) ($this->box_cost ?? 0)
+            + (float) ($this->sticker_cost ?? 0);
+
+        return [
+            'printing' => $printing,
+            'labour' => $labour,
+            'packaging' => $packaging,
+            'total' => $printing + $labour + $packaging,
+        ];
+    }
+
+    public function labourCost(): float
+    {
+        return (float) ($this->production_cost ?? 0) + (float) ($this->sewing_cost ?? 0);
     }
 
     /** @return array<string, mixed> */

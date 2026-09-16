@@ -2,11 +2,14 @@
 
 @section('content')
 @php($recipe = $product->exists ? $product->materials->keyBy('id') : collect())
+@php($selectedMaterials = old('materials', $recipe->keys()->all()))
+@php($preferredMaterialGroups = ['Fabric', 'Accessories', 'Ribbings'])
+@php($materialGroups = $materials->toBase()->groupBy(fn ($material) => $material->category?->name ?: 'Other materials'))
 <div class="top">
     <div>
         <div class="page-kicker">Product catalog</div>
         <h1>{{ $product->exists ? $product->name : 'New product' }}</h1>
-        <div class="muted">Pick the materials this product is made of and how much of each it uses. The cost follows.</div>
+        <div class="muted">Build the full unit cost in order: materials, printing, labor, then packaging.</div>
     </div>
     <a class="btn btn-secondary" href="{{ route('admin.products.index') }}">Back to products</a>
 </div>
@@ -28,66 +31,132 @@
         </label>
     </div>
 
-    <div class="form-section">
-        <div class="section-title-row">
-            <div>
-                <h3>Materials</h3>
-                <p class="muted">Tick what this product is made of, then set how many of each it uses.</p>
+    <div class="cost-step">
+        <div class="cost-step-number">1</div>
+        <div class="cost-step-body">
+            <div class="section-title-row">
+                <div>
+                    <h3>Materials</h3>
+                    <p class="muted">Choose the fabric, accessories, ribbings, and any other materials needed for one finished piece.</p>
+                </div>
+                <span class="selection-count" id="product-material-count">0 selected</span>
             </div>
-            <span class="selection-count" id="product-material-count">0 selected</span>
-        </div>
 
-        <div class="material-picker-tools">
-            <label class="material-search">Search materials
-                <input id="product-material-search" type="search" placeholder="Search by SKU or material name" autocomplete="off">
-            </label>
-            <button type="button" class="btn btn-secondary btn-small" id="product-material-selected">Show selected</button>
-        </div>
-
-        <div class="choice-grid" id="product-material-list">
-            @foreach($materials as $material)
-                @php($chosen = $recipe->get($material->id))
-                <label class="choice-card material-line {{ $chosen ? 'is-picked' : '' }}"
-                    data-material-search="{{ strtolower($material->sku.' '.$material->name) }}">
-                    <input type="checkbox" name="materials[]" value="{{ $material->id }}"
-                        @checked(in_array($material->id, old('materials', $recipe->keys()->all())))>
-                    @php($perCm2 = $material->areaDivisorCm2())
-                    <span class="material-line-name">{{ $material->name }}
-                        <em>&#8369;{{ number_format((float) ($material->retail_cost ?? $material->current_cost), 2) }} / {{ str_replace('_', ' ', $material->unit) }}
-                            @if((float) $material->waste_percentage > 0) &middot; +{{ rtrim(rtrim(number_format((float) $material->waste_percentage, 2), '0'), '.') }}% waste @endif</em>
-                        @if($perCm2)<em class="material-line-tag">by artwork size</em>@endif
-                    </span>
-                    <input class="material-qty" type="number" step=".0001" min="0"
-                        name="material_quantities[{{ $material->id }}]"
-                        value="{{ old('material_quantities.'.$material->id, $chosen?->pivot?->quantity) ?: 1 }}"
-                        data-qty
-                        data-cost="{{ (float) ($material->retail_cost ?? $material->current_cost) }}"
-                        data-waste="{{ (float) $material->waste_percentage }}"
-                        data-per-cm2="{{ $perCm2 ?? '' }}"
-                        aria-label="Quantity of {{ $material->name }}"
-                        title="How many {{ str_replace('_', ' ', $material->unit) }} this product uses">
+            <div class="material-picker-tools">
+                <label class="material-search">Search materials
+                    <input id="product-material-search" type="search" placeholder="Search by SKU or material name" autocomplete="off">
                 </label>
-            @endforeach
+                <button type="button" class="btn btn-secondary btn-small" id="product-material-selected">Show selected</button>
+            </div>
+
+            <div id="product-material-list">
+                @foreach($preferredMaterialGroups as $groupName)
+                    @if($materialGroups->has($groupName))
+                        <section class="material-group" data-material-group>
+                            <div class="material-group-title">{{ $groupName }}</div>
+                            <div class="choice-grid">
+                                @foreach($materialGroups->get($groupName) as $material)
+                                    @include('admin.products.material-line', ['material' => $material, 'recipe' => $recipe, 'selectedMaterials' => $selectedMaterials])
+                                @endforeach
+                            </div>
+                        </section>
+                    @endif
+                @endforeach
+
+                @foreach($materialGroups->except($preferredMaterialGroups) as $groupName => $groupMaterials)
+                    <section class="material-group" data-material-group>
+                        <div class="material-group-title">{{ $groupName }}</div>
+                        <div class="choice-grid">
+                            @foreach($groupMaterials as $material)
+                                @include('admin.products.material-line', ['material' => $material, 'recipe' => $recipe, 'selectedMaterials' => $selectedMaterials])
+                            @endforeach
+                        </div>
+                    </section>
+                @endforeach
+            </div>
+        </div>
+    </div>
+
+    <div class="cost-step">
+        <div class="cost-step-number">2</div>
+        <div class="cost-step-body">
+            <div class="section-title-row">
+                <div>
+                    <h3>Printing</h3>
+                    <p class="muted">Select the print method and enter its cost per piece. Silkscreen, embroidery, and full sublimation are supported together with your existing methods.</p>
+                </div>
+            </div>
+            <div class="form-grid form-grid-three cost-input-grid">
+                <label>Printing method
+                    <select name="print_type" required>
+                        <option value="" disabled @selected(!old('print_type', $product->print_type))>— select printing method —</option>
+                        @foreach(\App\Support\ProductionPipeline::printTypes() as $key => $type)
+                            <option value="{{ $key }}" @selected(old('print_type',$product->print_type)===$key)>{{ $type['label'] }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label>Printing cost / piece
+                    <span class="money-input"><span>₱</span><input name="printing_cost" type="number" step=".01" min="0.01" required value="{{ old('printing_cost', $product->printing_cost) }}" data-component="printing"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="cost-step">
+        <div class="cost-step-number">3</div>
+        <div class="cost-step-body">
+            <div class="section-title-row">
+                <div>
+                    <h3>Labor cost</h3>
+                    <p class="muted">Enter the production cost and sewing cost for one piece.</p>
+                </div>
+            </div>
+            <div class="form-grid form-grid-three cost-input-grid">
+                <label>Production cost
+                    <span class="money-input"><span>₱</span><input name="production_cost" type="number" step=".01" min="0" value="{{ old('production_cost',$product->production_cost ?? 0) }}" data-component="labor"></span>
+                </label>
+                <label>Sewing cost
+                    <span class="money-input"><span>₱</span><input name="sewing_cost" type="number" step=".01" min="0" value="{{ old('sewing_cost',$product->sewing_cost ?? 0) }}" data-component="labor"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="cost-step">
+        <div class="cost-step-number">4</div>
+        <div class="cost-step-body">
+            <div class="section-title-row">
+                <div>
+                    <h3>Packaging</h3>
+                    <p class="muted">Enter only the packaging used by this product. Leave an unused item at zero.</p>
+                </div>
+            </div>
+            <div class="form-grid form-grid-three cost-input-grid">
+                <label>Plastic
+                    <span class="money-input"><span>₱</span><input name="plastic_cost" type="number" step=".01" min="0" value="{{ old('plastic_cost',$product->plastic_cost ?? 0) }}" data-component="packaging"></span>
+                </label>
+                <label>Box
+                    <span class="money-input"><span>₱</span><input name="box_cost" type="number" step=".01" min="0" value="{{ old('box_cost',$product->box_cost ?? 0) }}" data-component="packaging"></span>
+                </label>
+                <label>Sticker
+                    <span class="money-input"><span>₱</span><input name="sticker_cost" type="number" step=".01" min="0" value="{{ old('sticker_cost',$product->sticker_cost ?? 0) }}" data-component="packaging"></span>
+                </label>
+            </div>
         </div>
     </div>
 
     @php($margin = \App\Models\Setting::margin())
     <div class="costing-summary" data-costing-summary data-margin="{{ $margin }}">
-        <div><span>Material cost</span><b data-material-total>&#8369;0.00</b></div>
-        <div data-area-row hidden><span>Per cm&sup2; of print</span><b data-area-total>&#8369;0.0000</b></div>
+        <div><span>Materials</span><b data-material-total>&#8369;0.00</b></div>
+        <div><span>Printing</span><b data-printing-total>&#8369;0.00</b></div>
+        <div><span>Labor <em>production + sewing</em></span><b data-labor-total>&#8369;0.00</b></div>
+        <div><span>Packaging <em>plastic + box + sticker</em></span><b data-packaging-total>&#8369;0.00</b></div>
+        <div class="costing-summary-grand"><span>Base product cost</span><b data-product-total>&#8369;0.00</b></div>
+        <div data-area-row hidden><span>Additional material cost / cm&sup2; of print</span><b data-area-total>&#8369;0.0000</b></div>
         <div><span>Estimated selling price <em>{{ rtrim(rtrim(number_format($margin, 2), '0'), '.') }}% margin</em></span><b data-selling-total>&#8369;0.00</b></div>
-        <p class="muted" data-costing-note>Tick materials above and set how many of each this product uses.</p>
-        <p class="muted" data-area-note hidden>A material measured by area costs nothing until an artwork size is given, so it is quoted per square centimetre here and priced on the quotation. Labour comes from the production stages this product's print type runs.</p>
+        <p class="muted" data-costing-note>Select the materials used by this product.</p>
+        <p class="muted" data-area-note hidden>Area-based materials are added when the quotation knows the artwork size. The base product cost above already includes printing, labor, and packaging.</p>
     </div>
-
-    <label class="field-block">Print type <span class="cost-helper-optional">how this product is made — decides which production stages it pays for. A product printed two ways needs an entry for each.</span>
-        <select name="print_type">
-            <option value="">— not set —</option>
-            @foreach(\App\Support\ProductionPipeline::printTypes() as $key => $type)
-                <option value="{{ $key }}" @selected(old('print_type',$product->print_type)===$key)>{{ $type['label'] }}</option>
-            @endforeach
-        </select>
-    </label>
 
     <label class="field-block">Description<textarea name="description">{{ old('description',$product->description) }}</textarea></label>
     <input type="hidden" name="is_active" value="1">
@@ -98,16 +167,22 @@
     </div>
 </form>
 
+<style>
+.cost-step{display:grid;grid-template-columns:42px minmax(0,1fr);gap:14px;padding:22px 0;border-top:1px solid var(--line)}.cost-step:first-of-type{margin-top:20px}.cost-step-number{width:34px;height:34px;border-radius:10px;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;font-weight:800}.cost-step-body{min-width:0}.material-group{margin-top:18px}.material-group-title{font-weight:800;font-size:13px;margin-bottom:8px}.cost-input-grid{max-width:900px}.money-input{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}.money-input>span{padding:0 0 0 12px;color:var(--muted);font-weight:700}.money-input input{border:0!important;box-shadow:none!important}.costing-summary-grand{padding-top:12px!important;margin-top:5px;border-top:1px solid var(--line)}.costing-summary-grand b{font-size:20px}.material-group[hidden]{display:none}@media(max-width:760px){.cost-step{grid-template-columns:1fr}.cost-step-number{margin-bottom:-4px}}
+</style>
+
 <script>
-/* The cost of a product is the sum of its materials. Recomputed as the recipe
-   is edited so the figure is visible before saving; the server recomputes it
-   from the same quantities afterwards, so this is a preview, never the value. */
 document.addEventListener('DOMContentLoaded', () => {
     const summary = document.querySelector('[data-costing-summary]');
     if (!summary) return;
 
     const peso = value => '₱' + value.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const number = value => parseFloat(value) || 0;
     const materialOut = summary.querySelector('[data-material-total]');
+    const printingOut = summary.querySelector('[data-printing-total]');
+    const laborOut = summary.querySelector('[data-labor-total]');
+    const packagingOut = summary.querySelector('[data-packaging-total]');
+    const productOut = summary.querySelector('[data-product-total]');
     const sellingOut = summary.querySelector('[data-selling-total]');
     const note = summary.querySelector('[data-costing-note]');
     const areaOut = summary.querySelector('[data-area-total]');
@@ -115,60 +190,66 @@ document.addEventListener('DOMContentLoaded', () => {
     const areaNote = summary.querySelector('[data-area-note]');
     const count = document.getElementById('product-material-count');
 
+    function componentTotal(name) {
+        return [...document.querySelectorAll(`[data-component="${name}"]`)]
+            .reduce((sum, input) => sum + number(input.value), 0);
+    }
+
     function recalculate() {
-        let total = 0, perCm2 = 0, picked = 0, areaCount = 0;
+        let materials = 0, perCm2 = 0, picked = 0, areaCount = 0;
 
         for (const row of document.querySelectorAll('.material-line')) {
             const ticked = row.querySelector('input[type="checkbox"]');
             const qty = row.querySelector('[data-qty]');
-            /* An unticked material is not part of the product, so its quantity
-               is disabled rather than posted. */
             qty.disabled = !ticked.checked;
             row.classList.toggle('is-picked', ticked.checked);
             if (!ticked.checked) continue;
 
-            const amount = parseFloat(qty.value) || 0;
-            /* Waste is bought but not delivered, so it is charged on top. */
-            const consumed = amount * (1 + (parseFloat(qty.dataset.waste || 0) / 100));
-            const cost = parseFloat(qty.dataset.cost || 0);
+            const amount = number(qty.value);
+            const consumed = amount * (1 + (number(qty.dataset.waste) / 100));
+            const cost = number(qty.dataset.cost);
+            const divisor = number(qty.dataset.perCm2);
 
-            /* A material measured by area is consumed by how big the print is.
-               How many square centimetres one unit of it covers is known; how
-               big the artwork will be is not, and is not decided until a
-               quotation. Charging it as a whole unit here would say a shirt
-               eats a full square metre of film. It is quoted as a rate
-               instead. */
-            const divisor = parseFloat(qty.dataset.perCm2 || 0);
             if (divisor > 0) {
                 perCm2 += (consumed / divisor) * cost;
                 areaCount++;
             } else {
-                total += consumed * cost;
+                materials += consumed * cost;
             }
             picked++;
         }
 
-        const margin = parseFloat(summary.dataset.margin || 0);
+        const printing = componentTotal('printing');
+        const labor = componentTotal('labor');
+        const packaging = componentTotal('packaging');
+        const total = materials + printing + labor + packaging;
+        const margin = number(summary.dataset.margin);
         const selling = margin >= 100 || margin <= 0 ? total : total / (1 - (margin / 100));
 
-        materialOut.textContent = peso(total);
+        materialOut.textContent = peso(materials);
+        printingOut.textContent = peso(printing);
+        laborOut.textContent = peso(labor);
+        packagingOut.textContent = peso(packaging);
+        productOut.textContent = peso(total);
         sellingOut.textContent = peso(selling);
         areaOut.textContent = '₱' + perCm2.toLocaleString('en-PH', {minimumFractionDigits: 4, maximumFractionDigits: 4});
         areaRow.hidden = areaCount === 0;
         areaNote.hidden = areaCount === 0;
 
         note.textContent = picked
-            ? picked + (picked === 1 ? ' material' : ' materials') + ' × quantity'
-                + (areaCount ? ', ' + areaCount + ' sized by the artwork' : '')
-            : 'Tick materials above and set how many of each this product uses.';
+            ? picked + (picked === 1 ? ' material selected' : ' materials selected')
+                + (areaCount ? ', ' + areaCount + ' priced by artwork size' : '')
+            : 'Select the fabric, accessories, ribbings, and other materials this product needs.';
         if (count) count.textContent = picked + ' selected';
     }
 
-    document.addEventListener('change', e => { if (e.target.matches('.material-line input')) recalculate(); });
-    document.addEventListener('input', e => { if (e.target.matches('[data-qty]')) recalculate(); });
+    document.addEventListener('change', e => {
+        if (e.target.matches('.material-line input, [data-component]')) recalculate();
+    });
+    document.addEventListener('input', e => {
+        if (e.target.matches('[data-qty], [data-component]')) recalculate();
+    });
 
-    /* Searching a long list, and narrowing it to what is already in the recipe,
-       are the two ways to find anything among hundreds of materials. */
     const search = document.getElementById('product-material-search');
     const onlySelected = document.getElementById('product-material-selected');
     let selectedOnly = false;
@@ -179,6 +260,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const matches = !term || row.dataset.materialSearch.includes(term);
             const included = !selectedOnly || row.querySelector('input[type="checkbox"]').checked;
             row.hidden = !(matches && included);
+        }
+        for (const group of document.querySelectorAll('[data-material-group]')) {
+            group.hidden = ![...group.querySelectorAll('.material-line')].some(row => !row.hidden);
         }
     }
 

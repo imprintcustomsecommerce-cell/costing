@@ -5,9 +5,9 @@ title Imprint Customs Costing Launcher
 cd /d "%~dp0"
 
 REM The application always serves on this port. Port 8000 belongs to the
-REM production system and 8001 to the sample, so this one is left free for
+REM production system is on 8000, so this costing system uses the requested
 REM costing and stated once here rather than repeated down the file.
-set PORT=8002
+set PORT=8001
 
 REM Serve on every interface, not just this machine. Bound to 127.0.0.1 the
 REM app answers only its own PC and the shop floor cannot reach it; 0.0.0.0

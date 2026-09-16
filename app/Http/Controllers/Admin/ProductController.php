@@ -12,8 +12,8 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * A product is a list of materials and how much of each it uses. Its cost is
- * the sum of them, at either the bulk or the retail material price.
+ * A product carries the complete per-piece cost: material recipe, printing,
+ * production/sewing labour and packaging.
  */
 class ProductController extends Controller
 {
@@ -44,6 +44,7 @@ class ProductController extends Controller
     {
         $data = $this->validated($r);
         $quantities = $this->takeRecipe($data);
+        $data['costing_mode'] = 'product_breakdown';
         $product = Product::create($data);
         $this->syncRecipe($product, $quantities);
         $audit->log('created', $product, [], $this->snapshot($product));
@@ -56,6 +57,7 @@ class ProductController extends Controller
         $before = $this->snapshot($product);
         $data = $this->validated($r, $product);
         $quantities = $this->takeRecipe($data);
+        $data['costing_mode'] = 'product_breakdown';
         $product->update($data);
         $this->syncRecipe($product, $quantities);
         $audit->log('product_changed', $product, $before, $this->snapshot($product->fresh('materials')));
@@ -68,7 +70,7 @@ class ProductController extends Controller
         return view('admin.products.form', [
             'product' => $product,
             'categories' => ProductCategory::active()->orderBy('name')->get(),
-            'materials' => Material::active()->orderBy('name')->get(),
+            'materials' => Material::with('category')->active()->orderBy('name')->get(),
         ]);
     }
 
@@ -80,7 +82,13 @@ class ProductController extends Controller
             'name' => 'required|string|max:255',
             'product_category_id' => 'required|exists:product_categories,id',
             'description' => 'nullable|string',
-            'print_type' => ['nullable', Rule::in(ProductionPipeline::keys())],
+            'print_type' => ['required', Rule::in(ProductionPipeline::keys())],
+            'printing_cost' => 'required|numeric|min:0.01',
+            'production_cost' => 'nullable|numeric|min:0',
+            'sewing_cost' => 'nullable|numeric|min:0',
+            'plastic_cost' => 'nullable|numeric|min:0',
+            'box_cost' => 'nullable|numeric|min:0',
+            'sticker_cost' => 'nullable|numeric|min:0',
             'is_active' => 'nullable|boolean',
             'materials' => 'nullable|array',
             'materials.*' => 'exists:materials,id',
@@ -122,10 +130,17 @@ class ProductController extends Controller
         $product->loadMissing('materials');
         $costing = $product->costing();
 
-        return $product->only(['sku', 'name', 'product_category_id', 'is_active', 'print_type']) + [
+        return $product->only([
+            'sku', 'name', 'product_category_id', 'is_active', 'print_type', 'costing_mode',
+            'printing_cost', 'production_cost', 'sewing_cost', 'plastic_cost', 'box_cost', 'sticker_cost',
+        ]) + [
             'materials' => $product->materials
                 ->mapWithKeys(fn (Material $m) => [$m->sku => (float) $m->pivot->quantity])
                 ->all(),
+            'material_cost' => $costing['material_retail'],
+            'printing' => $costing['printing'],
+            'labour' => $costing['labour'],
+            'packaging' => $costing['packaging'],
             'bulk_cost' => $costing['bulk'],
             'retail_cost' => $costing['retail'],
         ];

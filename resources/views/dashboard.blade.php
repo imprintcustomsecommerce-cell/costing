@@ -6,7 +6,7 @@
     <div>
         <div class="page-kicker">Overview</div>
         <h1>Dashboard</h1>
-        <div class="muted">What a product costs, from the materials it is made of.</div>
+        <div class="muted">What each product costs across materials, printing, labor, and packaging.</div>
     </div>
     <a class="btn" href="{{ route('admin.products.create') }}">＋ New product</a>
 </div>
@@ -67,7 +67,7 @@
     <div class="section-heading" style="margin-top:0">
         <div>
             <h2>Products</h2>
-            <p class="muted">Most recently added, with what their materials cost.</p>
+            <p class="muted">Most recently added, with their saved product cost.</p>
         </div>
         <a class="btn btn-secondary btn-small" href="{{ route('admin.products.index') }}">All products</a>
     </div>

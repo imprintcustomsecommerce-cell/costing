@@ -342,10 +342,9 @@ class QuotationController extends Controller
                 ]);
             }
 
-            // A product with nothing in it costs nothing, whatever the shop
-            // charges for labour. Checked before the work is added, so a
-            // labour figure can never make an empty product look quotable.
-            $materials = (float) $costing['retail'];
+            // A finished product still needs a priced material recipe. Printing,
+            // labour or packaging must never make an empty garment look valid.
+            $materials = (float) $costing['material_retail'];
             if ($materials <= 0) {
                 throw ValidationException::withMessages([
                     'items' => "\"{$product->name}\" has no priced materials, so it cannot be quoted yet.",
@@ -367,11 +366,17 @@ class QuotationController extends Controller
             // quotation the customer has already been given.
             $printType = $product->print_type;
 
-            // Materials, then the per-piece stages this route runs through the
-            // floor, then the margin. The once-per-job stages are not here:
-            // they are charged once on the quotation as setup.
-            $labour = ProductionStage::perPieceCost($printType);
-            $cost = $materials + $labour;
+            // Products saved through the new form carry their own per-piece
+            // printing, production, sewing and packaging costs. Legacy products
+            // still use the old production-stage labour so existing integrations
+            // continue to price exactly as they did before this change.
+            if ($product->usesCostBreakdown()) {
+                $labour = $product->labourCost();
+                $cost = (float) $costing['retail'];
+            } else {
+                $labour = ProductionStage::perPieceCost($printType);
+                $cost = $materials + $labour;
+            }
             $margin = Setting::margin();
             $listPrice = $margin > 0 ? $cost / (1 - ($margin / 100)) : $cost;
 
@@ -498,14 +503,16 @@ class QuotationController extends Controller
                     'sku' => $product->sku,
                     'name' => $product->name,
                     'bulk' => round($costing['bulk'], 2),
-                    // What the materials alone cost, and what each square
-                    // centimetre of print adds to them. Labour and margin are
-                    // applied on top, so the preview can follow the minutes.
+                    // For new products this is the whole fixed per-piece cost
+                    // (materials + printing + labour + packaging). Legacy
+                    // products still add their stage labour separately below.
                     'materials' => round($costing['retail'], 2),
                     'materials_per_cm2' => $this->areaRate($product, 'retail'),
                     'print_type' => $product->print_type,
                     'print_type_label' => ProductionPipeline::label($product->print_type),
-                    'labour' => round(ProductionStage::perPieceCost($product->print_type), 2),
+                    'labour' => $product->usesCostBreakdown()
+                        ? 0.0
+                        : round(ProductionStage::perPieceCost($product->print_type), 2),
                     'setup' => round(ProductionStage::setupCost([$product->print_type]), 2),
                     'needs_artwork' => $product->requiresArtworkSize(),
                 ];

@@ -47,7 +47,7 @@ class DatabaseSeeder extends Seeder
         foreach (['Apparel', 'Accessories'] as $name) {
             ProductCategory::firstOrCreate(['slug' => \Illuminate\Support\Str::slug($name)], ['name' => $name, 'is_active' => true]);
         }
-        foreach (['Fabric', 'Vinyl & Media', 'Thread', 'Ink', 'Packaging', 'Accessories'] as $name) {
+        foreach (['Fabric', 'Accessories', 'Ribbings', 'Vinyl & Media', 'Thread', 'Ink', 'Packaging'] as $name) {
             MaterialCategory::firstOrCreate(['name' => $name], ['is_active' => true]);
         }
 
