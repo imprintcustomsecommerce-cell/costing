@@ -28,7 +28,15 @@
                     <td class="num">{{ $quotation->items_count }}</td>
                     <td class="num"><span class="name">₱{{ number_format((float) $quotation->total, 2) }}</span></td>
                     <td>{{ $quotation->created_at->toDateString() }}</td>
-                    <td><a class="table-link" href="{{ route('quotations.show',$quotation) }}">Open</a></td>
+                    <td class="row-actions">
+                        <a class="table-link" href="{{ route('quotations.show',$quotation) }}">Open</a>
+                        <a class="table-link" href="{{ route('quotations.edit',$quotation) }}">Edit</a>
+                        <form method="post" action="{{ route('quotations.destroy',$quotation) }}"
+                            onsubmit="return confirm('Delete {{ $quotation->number }} for good, with its lines and any artwork? This cannot be undone.')">
+                            @csrf @method('DELETE')
+                            <button type="submit" class="table-link is-danger">Remove</button>
+                        </form>
+                    </td>
                 </tr>
             @empty
                 <tr><td colspan="6" class="empty-state">No quotations yet.</td></tr>

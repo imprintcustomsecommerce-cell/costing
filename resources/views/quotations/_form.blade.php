@@ -103,7 +103,7 @@
             </div>
         </dl>
         <p class="muted">New products use the saved product breakdown: materials + printing + labor + packaging. Older products that have not been resaved still use their production stages.</p>
-        <p class="muted">@if($validityDays > 0)This price stands for {{ $validityDays }} {{ \Illuminate\Support\Str::plural('day', $validityDays) }} from today.@endif Print type and per-piece costs are set on the product. Anything printed on film or vinyl is costed by the artwork size.@if($breaks->isNotEmpty()) Volume discounts start at {{ (int) $breaks->last()['min'] }} pieces.@endif</p>
+        <p class="muted">Print type and per-piece costs are set on the product. Anything printed on film or vinyl is costed by the artwork size.@if($breaks->isNotEmpty()) Volume discounts start at {{ (int) $breaks->last()['min'] }} pieces.@endif</p>
     </div>
 
     <label class="field-block">Notes <span class="cost-helper-optional">optional</span><textarea name="notes">{{ old('notes', $editing ? $quotation->notes : '') }}</textarea></label>

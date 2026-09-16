@@ -153,6 +153,27 @@ class ArtworkTest extends TestCase
         $this->assertSame(0, Artwork::count());
     }
 
+    public function test_removing_a_quotation_takes_its_artwork_files_off_disk(): void
+    {
+        Storage::fake('artwork');
+        $this->user();
+        $quotation = $this->quotation();
+        $this->post('/quotations/'.$quotation->id.'/artwork', [
+            'file' => UploadedFile::fake()->image('front-logo.png'),
+        ]);
+
+        $stored = Artwork::sole()->stored_path;
+        Storage::disk('artwork')->assertExists($stored);
+
+        $this->delete('/quotations/'.$quotation->id)->assertRedirect(route('quotations.index'));
+
+        // The rows follow the quotation by way of the foreign keys, but
+        // nothing in the database reaches on to disk, so the file has to be
+        // removed deliberately or it is left with no record of what it was.
+        $this->assertSame(0, Artwork::count());
+        Storage::disk('artwork')->assertMissing($stored);
+    }
+
     public function test_artwork_is_not_reachable_without_signing_in(): void
     {
         Storage::fake('artwork');

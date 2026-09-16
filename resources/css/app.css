@@ -348,3 +348,10 @@ th{background:#f1f5f9;color:#64748b}tbody tr:hover{background:#f8fbff}.table-lin
 .error-meta dd{margin:3px 0 0;font-size:14px;color:var(--ink)}
 .error-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
 @media(max-width:520px){.error-card{padding:26px 20px}.error-meta{grid-template-columns:1fr}}
+
+/* Actions at the end of a table row. The destructive one is a link like the
+   others until you reach for it, so it does not shout from every row. */
+.row-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.row-actions form{display:inline;margin:0}
+.row-actions .is-danger{color:var(--muted);background:none;border:0;padding:0;font:inherit;cursor:pointer}
+.row-actions .is-danger:hover{color:var(--danger);text-decoration:underline}

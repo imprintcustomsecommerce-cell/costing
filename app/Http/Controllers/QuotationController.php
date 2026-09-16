@@ -14,6 +14,7 @@ use App\Support\ProductionPipeline;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -49,7 +50,6 @@ class QuotationController extends Controller
             'breaks' => $this->breaks(),
             'margin' => Setting::margin(),
             'rushTiers' => $this->rushTiers(),
-            'validityDays' => (int) Setting::number('quotation_validity_days', 15),
         ]);
     }
 
@@ -150,7 +150,6 @@ class QuotationController extends Controller
             'breaks' => $this->breaks(),
             'margin' => Setting::margin(),
             'rushTiers' => $this->rushTiers(),
-            'validityDays' => (int) Setting::number('quotation_validity_days', 15),
         ]);
     }
 
@@ -185,6 +184,35 @@ class QuotationController extends Controller
 
         return redirect()->route('quotations.show', $quotation)
             ->with('success', "Quotation {$quotation->number} updated.");
+    }
+
+    /**
+     * Delete a quotation for good.
+     *
+     * The lines, the print locations and the artwork rows follow it by way of
+     * the foreign keys, but the uploaded files do not: nothing in the database
+     * reaches on to disk. They are removed first, so a deleted quotation does
+     * not leave its artwork behind with no record of what it belonged to.
+     *
+     * What was sent to a customer is worth keeping, so this is for mistakes and
+     * abandoned drafts rather than for tidying up.
+     */
+    public function destroy(Quotation $quotation, AuditService $audit)
+    {
+        $quotation->load('artworks');
+        $number = $quotation->number;
+
+        DB::transaction(function () use ($quotation, $audit) {
+            foreach ($quotation->artworks as $artwork) {
+                Storage::disk($artwork->disk)->delete($artwork->stored_path);
+            }
+
+            $audit->log('deleted', $quotation, $quotation->toArray(), []);
+            $quotation->delete();
+        });
+
+        return redirect()->route('quotations.index')
+            ->with('success', "Quotation {$number} deleted.");
     }
 
     /**
@@ -255,30 +283,12 @@ class QuotationController extends Controller
         $rush = round($subtotal * ($surcharge / 100), 2);
 
         $quotation->forceFill([
-            // A price stands for as long as the shop says it does. Set here
-            // rather than typed, and set again whenever the quotation is
-            // priced: an edit re-quotes at today's costs, so it is today the
-            // clock should run from.
-            'valid_until' => $this->validUntil(),
             'setup_cost' => 0,
             'subtotal' => $subtotal,
             'rush_percentage' => $surcharge,
             'rush_amount' => $rush,
             'total' => round($subtotal + $rush, 2),
         ])->save();
-    }
-
-    /**
-     * The date this quotation stops standing, from the shop's validity days.
-     *
-     * A setting of nought or less would expire the quotation the moment it was
-     * written, which is nobody's intention, so it is read as no expiry at all.
-     */
-    private function validUntil(): ?string
-    {
-        $days = (int) Setting::number('quotation_validity_days', 15);
-
-        return $days > 0 ? today()->addDays($days)->toDateString() : null;
     }
 
     /**

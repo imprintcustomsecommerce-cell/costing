@@ -13,6 +13,7 @@ use App\Models\RushTier;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -1403,110 +1404,87 @@ class QuotationTest extends TestCase
         $this->assertStringNotContainsString('data-total="', $page);
     }
 
-    public function test_a_quotation_stands_for_the_validity_days_in_settings(): void
+    public function test_a_quotation_is_given_no_expiry(): void
     {
         $this->user();
-        Setting::updateOrCreate(['key' => 'quotation_validity_days'], ['value' => '15']);
         $product = $this->product('VALID', bulk: 50, retail: 50);
 
+        // A quotation no longer stamps itself with an expiry date, and the
+        // browser cannot post one either.
         $this->post('/quotations', [
             'customer_name' => 'Buyer',
-            'items' => [['product_id' => $product->id, 'quantity' => 1]],
-        ])->assertSessionHasNoErrors();
-
-        // Nobody types an expiry: the shop says how long a price stands.
-        $this->assertSame(
-            today()->addDays(15)->toDateString(),
-            Quotation::sole()->valid_until->toDateString()
-        );
-    }
-
-    public function test_the_validity_follows_the_setting(): void
-    {
-        $this->user();
-        Setting::updateOrCreate(['key' => 'quotation_validity_days'], ['value' => '30']);
-        $product = $this->product('VALID30', bulk: 50, retail: 50);
-
-        $this->post('/quotations', [
-            'customer_name' => 'Buyer',
-            'items' => [['product_id' => $product->id, 'quantity' => 1]],
-        ])->assertSessionHasNoErrors();
-
-        $this->assertSame(
-            today()->addDays(30)->toDateString(),
-            Quotation::sole()->valid_until->toDateString()
-        );
-    }
-
-    public function test_a_validity_of_nothing_leaves_the_quotation_without_an_expiry(): void
-    {
-        $this->user();
-        Setting::updateOrCreate(['key' => 'quotation_validity_days'], ['value' => '0']);
-        $product = $this->product('NOEXPIRY', bulk: 50, retail: 50);
-
-        $this->post('/quotations', [
-            'customer_name' => 'Buyer',
-            'items' => [['product_id' => $product->id, 'quantity' => 1]],
-        ])->assertSessionHasNoErrors();
-
-        // Expiring the moment it is written is nobody's intention.
-        $this->assertNull(Quotation::sole()->valid_until);
-    }
-
-    public function test_the_form_never_accepts_an_expiry_from_the_browser(): void
-    {
-        $this->user();
-        Setting::updateOrCreate(['key' => 'quotation_validity_days'], ['value' => '15']);
-        $product = $this->product('FORGED', bulk: 50, retail: 50);
-
-        $this->post('/quotations', [
-            'customer_name' => 'Chancer',
             'valid_until' => today()->addYears(5)->toDateString(),
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
         ])->assertSessionHasNoErrors();
 
-        $this->assertSame(
-            today()->addDays(15)->toDateString(),
-            Quotation::sole()->valid_until->toDateString()
-        );
+        $this->assertNull(Quotation::sole()->valid_until);
     }
 
-    public function test_re_quoting_restarts_the_clock(): void
+    public function test_a_quotation_can_be_removed(): void
     {
         $this->user();
-        Setting::updateOrCreate(['key' => 'quotation_validity_days'], ['value' => '15']);
-        $product = $this->product('RECLOCK', bulk: 50, retail: 50);
+        $product = $this->product('BIN', bulk: 50, retail: 50);
 
         $this->post('/quotations', [
-            'customer_name' => 'Buyer',
+            'customer_name' => 'Mistake',
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
         ])->assertSessionHasNoErrors();
 
         $quotation = Quotation::sole();
-        $quotation->forceFill(['valid_until' => today()->subDays(3)])->save();
+        $this->assertSame(1, $quotation->items()->count());
 
-        // An edit re-prices at today's costs, so the price stands from today.
-        $this->put("/quotations/{$quotation->id}", [
-            'customer_name' => 'Buyer',
-            'items' => [['product_id' => $product->id, 'quantity' => 2]],
-        ])->assertSessionHasNoErrors();
+        $this->delete("/quotations/{$quotation->id}")
+            ->assertRedirect(route('quotations.index'));
 
-        $this->assertSame(
-            today()->addDays(15)->toDateString(),
-            $quotation->fresh()->valid_until->toDateString()
-        );
+        $this->assertSame(0, Quotation::count());
+        // The lines go with it rather than lingering with no quotation.
+        $this->assertSame(0, DB::table('quotation_items')->count());
     }
 
-    public function test_the_form_says_how_long_the_price_will_stand(): void
+    public function test_removing_a_quotation_is_written_to_the_audit_log(): void
     {
         $this->user();
-        Setting::updateOrCreate(['key' => 'quotation_validity_days'], ['value' => '15']);
-        $this->product('SAYS', bulk: 50, retail: 50);
+        $product = $this->product('AUDITBIN', bulk: 50, retail: 50);
 
-        $this->get('/quotations/create')
-            ->assertOk()
-            ->assertSee('This price stands for 15 days from today.');
+        $this->post('/quotations', [
+            'customer_name' => 'Mistake',
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertSessionHasNoErrors();
+
+        $quotation = Quotation::sole();
+        $this->delete("/quotations/{$quotation->id}");
+
+        $this->assertSame(1, DB::table('audit_logs')
+            ->where('action', 'deleted')
+            ->where('entity_type', Quotation::class)
+            ->count());
     }
+
+    public function test_the_list_offers_opening_editing_and_removing(): void
+    {
+        $this->user();
+        $product = $this->product('LISTED', bulk: 50, retail: 50);
+
+        $this->post('/quotations', [
+            'customer_name' => 'Listed',
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertSessionHasNoErrors();
+
+        $quotation = Quotation::sole();
+
+        $this->get('/quotations')
+            ->assertOk()
+            ->assertSee(route('quotations.show', $quotation))
+            ->assertSee(route('quotations.edit', $quotation))
+            ->assertSee('Remove')
+            // Deleting is not something a stray click should manage.
+            ->assertSee('This cannot be undone', false);
+    }
+
+
+
+
+
 
     public function test_a_new_product_breakdown_is_not_charged_stage_labour_twice(): void
     {
