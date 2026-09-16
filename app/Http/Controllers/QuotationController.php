@@ -49,6 +49,7 @@ class QuotationController extends Controller
             'customers' => Customer::active()->orderBy('contact_name')->get(),
             'breaks' => $this->breaks(),
             'margin' => Setting::margin(),
+            'minimumMargin' => Setting::minimumMargin(),
             'rushTiers' => $this->rushTiers(),
         ]);
     }
@@ -149,6 +150,7 @@ class QuotationController extends Controller
             'customers' => Customer::active()->orderBy('contact_name')->get(),
             'breaks' => $this->breaks(),
             'margin' => Setting::margin(),
+            'minimumMargin' => Setting::minimumMargin(),
             'rushTiers' => $this->rushTiers(),
         ]);
     }
@@ -385,13 +387,23 @@ class QuotationController extends Controller
             $margin = Setting::margin();
             $listPrice = $margin > 0 ? $cost / (1 - ($margin / 100)) : $cost;
 
-            // Bigger orders earn a break off the list price. It can never cut
-            // into the cost: a discount that would sell below what the job
-            // costs is held at cost instead of quietly losing money.
+            // How far a discount may cut: down to the shop's minimum gross
+            // margin, or to cost when no minimum is set.
+            //
+            // Never above the list price itself. A shop whose default margin
+            // sits under its own floor has a contradiction in its settings -
+            // one the settings screen now refuses to save - and the answer to
+            // that is to fix the settings, not to quietly charge a customer
+            // more than the price list says.
+            $floor = min($listPrice, Setting::priceFloor($cost));
+
+            // Bigger orders earn a break off the list price, down to that
+            // floor. A discount that would sell under it is held there instead
+            // of quietly giving away the margin the shop said it needed.
             $discount = QuantityBreak::discountFor($quantity);
             $discounted = $listPrice * (1 - ($discount / 100));
-            if ($discounted < $cost) {
-                $discounted = $cost;
+            if ($discounted < $floor) {
+                $discounted = $floor;
                 $discount = $listPrice > 0 ? (1 - ($discounted / $listPrice)) * 100 : 0.0;
             }
 

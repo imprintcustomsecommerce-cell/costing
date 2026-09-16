@@ -24,7 +24,7 @@ class SettingController extends Controller
 
     public function update(Request $r, AuditService $audit)
     {
-        $data = $r->validate(['company_name' => 'required|string|max:255', 'company_address' => 'nullable|string', 'company_phone' => 'nullable|string|max:50', 'company_email' => 'nullable|email', 'company_website' => 'nullable|url', 'default_margin' => 'nullable|numeric|min:0.01|max:99.99', 'minimum_gross_margin' => 'required|numeric|min:0|max:99.99']);
+        $data = $r->validate(['company_name' => 'required|string|max:255', 'company_address' => 'nullable|string', 'company_phone' => 'nullable|string|max:50', 'company_email' => 'nullable|email', 'company_website' => 'nullable|url', 'minimum_gross_margin' => 'required|numeric|min:0|max:99.99', 'default_margin' => 'nullable|numeric|min:0.01|max:99.99|gte:minimum_gross_margin']);
         foreach (self::FIELDS as $key) {
             $setting = Setting::firstOrNew(['key' => $key]);
             $old = $setting->value;

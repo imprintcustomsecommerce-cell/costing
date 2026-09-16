@@ -48,6 +48,20 @@ class Setting extends Model
     }
 
     /**
+     * The lowest a line may be priced: what it cost, plus the margin the shop
+     * refuses to sell below.
+     *
+     * With no floor set this is simply cost, which is still a floor - selling
+     * under what a job costs is never a price, it is a mistake.
+     */
+    public static function priceFloor(float $cost): float
+    {
+        $floor = self::minimumMargin();
+
+        return $floor > 0 ? $cost / (1 - ($floor / 100)) : $cost;
+    }
+
+    /**
      * The margin a quoted line may never be discounted below, as a percentage
      * of the selling price. Nought means the floor is simply cost.
      */

@@ -137,6 +137,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const breaks = read('quote-breaks');
     const saved = read('quote-lines');
     const margin = {{ (float) $margin }};
+    const minimumMargin = {{ (float) $minimumMargin }};
+    /* What the shop refuses to sell below, as a price. The same floor the
+       server applies, so the preview cannot promise a price the save will
+       refuse to honour. */
+    const priceFloor = cost => minimumMargin > 0 && minimumMargin < 100
+        ? cost / (1 - minimumMargin / 100)
+        : cost;
     const rushTiers = read('quote-rush');
 
     /* Tightest deadline first, so the first tier the job falls inside is the
@@ -206,6 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cost += chosen ? (parseFloat(chosen.dataset.stageLabour) || 0) : 0;
 
             const listPrice = margin > 0 && margin < 100 ? cost / (1 - margin / 100) : cost;
+            /* How far a discount may cut, never above the list price itself. */
+            const floor = Math.min(listPrice, priceFloor(cost));
 
             const qty = parseFloat(row.querySelector('[data-qty]').value) || 0;
 
@@ -213,8 +222,8 @@ document.addEventListener('DOMContentLoaded', () => {
                cost exactly as the server does. */
             let discount = discountFor(qty);
             let unit = listPrice * (1 - discount / 100);
-            if (unit < cost) {
-                unit = cost;
+            if (unit < floor) {
+                unit = floor;
                 discount = listPrice > 0 ? (1 - unit / listPrice) * 100 : 0;
             }
             unit = Math.round(unit * 100) / 100;

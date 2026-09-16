@@ -29,6 +29,16 @@
         <div class="form-grid">
             <label>Default margin (%)<input name="default_margin" type="number" step=".01" min="0.01" max="99.99" value="{{ $v('default_margin') }}"></label>
             <label>Minimum gross margin (%)<input name="minimum_gross_margin" type="number" step=".01" min="0" max="99.99" value="{{ $v('minimum_gross_margin',30) }}" required></label>
+            @php($storedMargin = (float) $v('default_margin', 0))
+            @php($storedFloor = (float) $v('minimum_gross_margin', 0))
+            @if($storedMargin > 0 && $storedFloor > 0 && $storedMargin < $storedFloor)
+                <p class="alert-error" style="grid-column:1/-1">
+                    The selling margin ({{ rtrim(rtrim(number_format($storedMargin, 2), '0'), '.') }}%) is below the minimum
+                    ({{ rtrim(rtrim(number_format($storedFloor, 2), '0'), '.') }}%), so every quotation is priced under the
+                    floor this screen claims to hold. Raise the selling margin or lower the minimum &mdash; these settings
+                    cannot be saved while they disagree.
+                </p>
+            @endif
         </div>
     </div>
 

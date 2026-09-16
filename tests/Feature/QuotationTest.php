@@ -1515,4 +1515,99 @@ class QuotationTest extends TestCase
         $this->assertEqualsWithDelta(130.00, (float) $item->unit_price, 0.01);
     }
 
+    /** The shop refuses to sell below this margin, whatever else is set. */
+    private function marginFloor(float $percent): void
+    {
+        Setting::updateOrCreate(['key' => 'minimum_gross_margin'], ['value' => (string) $percent]);
+        app()->forgetInstance('costing.setting.minimum_gross_margin');
+    }
+
+    public function test_a_default_margin_under_the_floor_is_not_silently_charged_up(): void
+    {
+        $this->user();
+        // The two settings disagreeing is a fault in the settings, and the
+        // answer is to fix them - not to charge a customer more than the price
+        // list says. The settings screen refuses to save this combination; a
+        // shop that already had it keeps quoting at its stated margin.
+        Setting::updateOrCreate(['key' => 'default_margin'], ['value' => '10']);
+        $this->marginFloor(30);
+        $product = $this->product('FLOORED', bulk: 70, retail: 70);
+
+        $this->post('/quotations', [
+            'customer_name' => 'Buyer',
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertSessionHasNoErrors();
+
+        // 70 at the stated 10%, not lifted to the 100 a 30% floor would give.
+        $this->assertEqualsWithDelta(77.78, (float) Quotation::sole()->items->sole()->unit_price, 0.01);
+    }
+
+    public function test_a_margin_above_the_floor_is_left_alone(): void
+    {
+        $this->user();
+        Setting::updateOrCreate(['key' => 'default_margin'], ['value' => '50']);
+        $this->marginFloor(30);
+        $product = $this->product('ABOVE', bulk: 50, retail: 50);
+
+        $this->post('/quotations', [
+            'customer_name' => 'Buyer',
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertSessionHasNoErrors();
+
+        // The floor is a floor, not a target.
+        $this->assertEqualsWithDelta(100.00, (float) Quotation::sole()->items->sole()->unit_price, 0.01);
+    }
+
+    public function test_a_volume_discount_stops_at_the_minimum_margin(): void
+    {
+        $this->user();
+        Setting::updateOrCreate(['key' => 'default_margin'], ['value' => '50']);
+        $this->marginFloor(30);
+        QuantityBreak::create(['min_quantity' => 10, 'discount_percentage' => 90]);
+        $product = $this->product('DISCFLOOR', bulk: 70, retail: 70);
+
+        $this->post('/quotations', [
+            'customer_name' => 'Chancer',
+            'items' => [['product_id' => $product->id, 'quantity' => 10]],
+        ])->assertSessionHasNoErrors();
+
+        $item = Quotation::with('items')->sole()->items->sole();
+
+        // A 90% break off 140 would be 14, well under the 70 it cost. It is
+        // held at the floor of 100 rather than at cost.
+        $this->assertEqualsWithDelta(100.00, (float) $item->unit_price, 0.01);
+    }
+
+    public function test_with_no_floor_set_a_discount_still_stops_at_cost(): void
+    {
+        $this->user();
+        Setting::updateOrCreate(['key' => 'default_margin'], ['value' => '50']);
+        $this->marginFloor(0);
+        QuantityBreak::create(['min_quantity' => 10, 'discount_percentage' => 90]);
+        $product = $this->product('COSTFLOOR', bulk: 70, retail: 70);
+
+        $this->post('/quotations', [
+            'customer_name' => 'Chancer',
+            'items' => [['product_id' => $product->id, 'quantity' => 10]],
+        ])->assertSessionHasNoErrors();
+
+        // Selling under what a job costs is never a price.
+        $this->assertEqualsWithDelta(70.00, (float) Quotation::sole()->items->sole()->unit_price, 0.01);
+    }
+
+    public function test_settings_refuse_a_default_margin_below_the_floor(): void
+    {
+        $this->user();
+
+        // The two numbers cannot be allowed to disagree in the first place.
+        $this->put('/admin/settings', $this->settingsPayload([
+            'minimum_gross_margin' => 30,
+            'default_margin' => 10,
+        ]))->assertSessionHasErrors('default_margin');
+
+        $this->put('/admin/settings', $this->settingsPayload([
+            'minimum_gross_margin' => 30,
+            'default_margin' => 40,
+        ]))->assertSessionHasNoErrors();
+    }
 }
