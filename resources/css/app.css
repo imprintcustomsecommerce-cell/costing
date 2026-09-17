@@ -522,3 +522,20 @@ th{background:#f1f5f9;color:#64748b}tbody tr:hover{background:#f8fbff}.table-lin
 .costing-summary-price{padding-left:18px;border-left:2px solid var(--accent-strong)}
 .costing-summary-price b{font-size:26px;font-weight:800;color:var(--accent-strong)}
 .costing-summary span em{font-style:normal;font-weight:400;text-transform:none;letter-spacing:0}
+
+/* The quotation line gained a print location, which made seven children in a
+   grid that named six columns. The seventh fell into an implicit track and
+   pushed Remove past the edge of the card. Named tracks now, so adding a
+   field is a visible change here rather than a silent overflow. */
+.quote-line{grid-template-columns:
+    minmax(0,1.6fr)   /* product        */
+    4.5rem            /* quantity       */
+    minmax(0,9rem)    /* artwork size   */
+    minmax(0,1.1fr)   /* print location */
+    6.5rem            /* unit price     */
+    7rem              /* line total     */
+    auto;             /* remove         */
+    gap:12px}
+@media(max-width:1200px){
+    .quote-line{grid-template-columns:minmax(0,1.4fr) 4.5rem minmax(0,8rem) minmax(0,1fr) 6rem 6.5rem auto;gap:10px}
+}
