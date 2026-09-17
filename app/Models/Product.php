@@ -25,6 +25,10 @@ class Product extends Model
             'plastic_cost' => 'decimal:4',
             'box_cost' => 'decimal:4',
             'sticker_cost' => 'decimal:4',
+            'design_count' => 'integer',
+            'extra_design_cost' => 'decimal:4',
+            'stitch_count' => 'integer',
+            'cost_per_stitch' => 'decimal:6',
         ];
     }
 
@@ -153,10 +157,38 @@ class Product extends Model
         return $this->costing_mode === 'product_breakdown';
     }
 
+    /**
+     * What printing one piece costs, the way its method is actually bought.
+     *
+     * Silkscreen is a screen per design: the base covers the first, and each
+     * design after it adds the extra charge. Three designs at 80 and 10 is
+     * 80 + 10 + 10.
+     *
+     * Embroidery is bought by the stitch: the base plus the stitch count at
+     * the rate per stitch.
+     *
+     * Everything else - sublimation, DTF, eco solvent, vinyl - is a single
+     * price for the piece, so the base stands on its own. A product that has
+     * never had a design or stitch figure entered costs exactly its base,
+     * whatever its method.
+     */
+    public function printingCost(): float
+    {
+        $base = (float) ($this->printing_cost ?? 0);
+
+        return match ($this->print_type) {
+            'silkscreen' => $base + max(0, (int) ($this->design_count ?? 1) - 1)
+                * (float) ($this->extra_design_cost ?? 0),
+            'embroidery' => $base + (int) ($this->stitch_count ?? 0)
+                * (float) ($this->cost_per_stitch ?? 0),
+            default => $base,
+        };
+    }
+
     /** @return array{printing: float, labour: float, packaging: float, total: float} */
     public function componentCosts(): array
     {
-        $printing = (float) ($this->printing_cost ?? 0);
+        $printing = $this->printingCost();
         $labour = $this->labourCost();
         $packaging = (float) ($this->plastic_cost ?? 0)
             + (float) ($this->box_cost ?? 0)

@@ -404,7 +404,7 @@ class ProductCostingTest extends TestCase
             'materials' => [$fabric->id, $this->ribbing()->id],
             'material_quantities' => [$fabric->id => 1],
             'print_type' => 'silkscreen',
-            'printing_cost' => 25,
+            'printing_cost' => 25, 'design_count' => 1, 'extra_design_cost' => 10,
             'production_cost' => 30,
             'sewing_cost' => 20,
             'plastic_cost' => 3,
@@ -480,5 +480,109 @@ class ProductCostingTest extends TestCase
             ->assertOk()
             ->assertSee('Ribbings')
             ->assertSee('At least one ribbing is required');
+    }
+
+    /** A saved product on a given method, with nothing else to get in the way. */
+    private function printed(string $sku, string $method, array $printing): Product
+    {
+        $product = Product::create([
+            'sku' => $sku, 'name' => $sku.' product', 'is_active' => true,
+            'costing_mode' => 'product_breakdown', 'print_type' => $method,
+            'product_category_id' => ProductCategory::firstOrCreate(['slug' => 'apparel'], ['name' => 'Apparel'])->id,
+        ] + $printing);
+
+        return $product->fresh();
+    }
+
+    public function test_silkscreen_charges_the_base_then_each_design_after_the_first(): void
+    {
+        // The shop's own figures: 80 for the first, 10 for each after it.
+        $product = $this->printed('SILK-3', 'silkscreen', [
+            'printing_cost' => 80, 'design_count' => 3, 'extra_design_cost' => 10,
+        ]);
+
+        // 80 + 10 + 10.
+        $this->assertEqualsWithDelta(100.00, $product->printingCost(), 0.001);
+    }
+
+    public function test_one_silkscreen_design_costs_the_base_alone(): void
+    {
+        $product = $this->printed('SILK-1', 'silkscreen', [
+            'printing_cost' => 80, 'design_count' => 1, 'extra_design_cost' => 10,
+        ]);
+
+        // The first design is what the base is for.
+        $this->assertEqualsWithDelta(80.00, $product->printingCost(), 0.001);
+    }
+
+    public function test_embroidery_charges_the_base_plus_its_stitches(): void
+    {
+        $product = $this->printed('EMB-8K', 'embroidery', [
+            'printing_cost' => 30, 'stitch_count' => 8000, 'cost_per_stitch' => 0.008,
+        ]);
+
+        // 30 + 8,000 x 0.008 = 30 + 64.
+        $this->assertEqualsWithDelta(94.00, $product->printingCost(), 0.001);
+    }
+
+    public function test_a_bigger_logo_costs_more_to_embroider(): void
+    {
+        $small = $this->printed('EMB-SMALL', 'embroidery', [
+            'printing_cost' => 30, 'stitch_count' => 4000, 'cost_per_stitch' => 0.008,
+        ]);
+        $large = $this->printed('EMB-LARGE', 'embroidery', [
+            'printing_cost' => 30, 'stitch_count' => 20000, 'cost_per_stitch' => 0.008,
+        ]);
+
+        $this->assertEqualsWithDelta(62.00, $small->printingCost(), 0.001);
+        $this->assertEqualsWithDelta(190.00, $large->printingCost(), 0.001);
+    }
+
+    public function test_sublimation_is_one_price_for_the_piece(): void
+    {
+        // Design and stitch figures left over from another method must not
+        // reach a price that does not use them.
+        $product = $this->printed('SUB-FLAT', 'full_sublimation', [
+            'printing_cost' => 120, 'design_count' => 4, 'extra_design_cost' => 10,
+            'stitch_count' => 9000, 'cost_per_stitch' => 0.008,
+        ]);
+
+        $this->assertEqualsWithDelta(120.00, $product->printingCost(), 0.001);
+    }
+
+    public function test_a_stitch_rate_survives_being_a_fraction_of_a_centavo(): void
+    {
+        // Held to six decimal places: rounded to two it would be nothing.
+        $product = $this->printed('EMB-TINY', 'embroidery', [
+            'printing_cost' => 0.01, 'stitch_count' => 12500, 'cost_per_stitch' => 0.0075,
+        ]);
+
+        $this->assertEqualsWithDelta(0.0075, (float) $product->cost_per_stitch, 0.0000001);
+        $this->assertEqualsWithDelta(93.76, $product->printingCost(), 0.001);
+    }
+
+    public function test_the_printing_method_decides_which_fields_are_required(): void
+    {
+        $this->admin();
+        $fabric = $this->material('REQ-FABRIC', bulk: 65);
+        $category = ProductCategory::firstOrCreate(['slug' => 'apparel'], ['name' => 'Apparel']);
+        $base = [
+            'product_category_id' => $category->id,
+            'materials' => [$fabric->id, $this->ribbing()->id],
+            'printing_cost' => 80,
+        ];
+
+        $this->post('/admin/products', $base + [
+            'sku' => 'REQ-SILK', 'name' => 'Silk', 'print_type' => 'silkscreen',
+        ])->assertSessionHasErrors(['design_count', 'extra_design_cost']);
+
+        $this->post('/admin/products', $base + [
+            'sku' => 'REQ-EMB', 'name' => 'Emb', 'print_type' => 'embroidery',
+        ])->assertSessionHasErrors(['stitch_count', 'cost_per_stitch']);
+
+        // Sublimation asks for neither.
+        $this->post('/admin/products', $base + [
+            'sku' => 'REQ-SUB', 'name' => 'Sub', 'print_type' => 'full_sublimation',
+        ])->assertSessionHasNoErrors();
     }
 }

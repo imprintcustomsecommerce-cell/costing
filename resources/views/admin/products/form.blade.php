@@ -98,9 +98,28 @@
                         @endforeach
                     </select>
                 </label>
-                <label>Printing cost / piece
-                    <span class="money-input"><span>₱</span><input name="printing_cost" type="number" step=".01" min="0.01" required value="{{ old('printing_cost', $product->printing_cost) }}" data-component="printing"></span>
+                <label>Printing cost / piece <span class="cost-helper-optional" data-base-hint>base price</span>
+                    <span class="money-input"><span>₱</span><input name="printing_cost" type="number" step=".01" min="0.01" required value="{{ old('printing_cost', $product->printing_cost) }}" data-component="printing" data-printing-base></span>
                 </label>
+
+                {{-- Silkscreen is a screen per design: the base covers the
+                     first, each one after it adds the extra charge. --}}
+                <label data-method-field="silkscreen" hidden>Number of designs
+                    <input name="design_count" type="number" step="1" min="1" max="50" value="{{ old('design_count', $product->design_count ?? 1) }}" data-design-count>
+                </label>
+                <label data-method-field="silkscreen" hidden>Cost per extra design
+                    <span class="money-input"><span>₱</span><input name="extra_design_cost" type="number" step=".01" min="0" value="{{ old('extra_design_cost', $product->extra_design_cost ?? 0) }}" data-extra-design></span>
+                </label>
+
+                {{-- Embroidery is bought by the stitch. --}}
+                <label data-method-field="embroidery" hidden>Stitch count
+                    <input name="stitch_count" type="number" step="1" min="1" max="5000000" value="{{ old('stitch_count', $product->stitch_count ?? 0) }}" data-stitch-count>
+                </label>
+                <label data-method-field="embroidery" hidden>Cost per stitch
+                    <span class="money-input"><span>₱</span><input name="cost_per_stitch" type="number" step=".000001" min="0" value="{{ old('cost_per_stitch', $product->cost_per_stitch ?? 0) }}" data-cost-per-stitch></span>
+                </label>
+
+                <output class="field-note" data-printing-note style="grid-column:1/-1"></output>
             </div>
         </div>
     </div>
@@ -198,6 +217,53 @@ document.addEventListener('DOMContentLoaded', () => {
             .reduce((sum, input) => sum + number(input.value), 0);
     }
 
+    const methodSelect = document.querySelector('select[name="print_type"]');
+    const printingNote = document.querySelector('[data-printing-note]');
+
+    /* Printing is bought differently by each method, so only the fields the
+       chosen one uses are shown. The others are disabled rather than merely
+       hidden: a disabled field is not posted, so a stale stitch count cannot
+       ride along on a silkscreen product. */
+    function showMethodFields() {
+        const method = methodSelect ? methodSelect.value : '';
+
+        for (const field of document.querySelectorAll('[data-method-field]')) {
+            const applies = field.dataset.methodField === method;
+            field.hidden = !applies;
+            field.querySelectorAll('input').forEach(input => { input.disabled = !applies; });
+        }
+    }
+
+    /* The same arithmetic the server uses: the base covers the first design,
+       and embroidery adds its stitches at the rate per stitch. */
+    function printingCost() {
+        const method = methodSelect ? methodSelect.value : '';
+        const base = number(document.querySelector('[data-printing-base]').value);
+
+        if (method === 'silkscreen') {
+            const designs = Math.max(1, number(document.querySelector('[data-design-count]').value) || 1);
+            const extra = number(document.querySelector('[data-extra-design]').value);
+            const cost = base + (designs - 1) * extra;
+            printingNote.textContent = designs > 1
+                ? designs + ' designs: base ' + peso(base) + ' + ' + (designs - 1) + ' x ' + peso(extra) + ' = ' + peso(cost) + ' a piece'
+                : 'One design, included in the base: ' + peso(cost) + ' a piece';
+            return cost;
+        }
+
+        if (method === 'embroidery') {
+            const stitches = number(document.querySelector('[data-stitch-count]').value);
+            const rate = number(document.querySelector('[data-cost-per-stitch]').value);
+            const cost = base + stitches * rate;
+            printingNote.textContent = stitches > 0
+                ? stitches.toLocaleString('en-PH') + ' stitches: base ' + peso(base) + ' + ' + peso(stitches * rate) + ' of stitching = ' + peso(cost) + ' a piece'
+                : peso(cost) + ' a piece';
+            return cost;
+        }
+
+        printingNote.textContent = peso(base) + ' a piece';
+        return base;
+    }
+
     function recalculate() {
         let materials = 0, perCm2 = 0, picked = 0, areaCount = 0;
 
@@ -222,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
             picked++;
         }
 
-        const printing = componentTotal('printing');
+        const printing = printingCost();
         const labor = componentTotal('labor');
         const packaging = componentTotal('packaging');
         const total = materials + printing + labor + packaging;
@@ -248,10 +314,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('change', e => {
         if (e.target.matches('.material-line input, [data-component]')) recalculate();
+        if (e.target.matches('select[name="print_type"]')) { showMethodFields(); recalculate(); }
     });
     document.addEventListener('input', e => {
-        if (e.target.matches('[data-qty], [data-component]')) recalculate();
+        if (e.target.matches('[data-qty], [data-component], [data-design-count], [data-extra-design], [data-stitch-count], [data-cost-per-stitch]')) recalculate();
     });
+
+    showMethodFields();
 
     const search = document.getElementById('product-material-search');
     const onlySelected = document.getElementById('product-material-selected');

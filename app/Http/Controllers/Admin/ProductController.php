@@ -85,6 +85,12 @@ class ProductController extends Controller
             'description' => 'nullable|string',
             'print_type' => ['required', Rule::in(ProductionPipeline::keys())],
             'printing_cost' => 'required|numeric|min:0.01',
+            // Only the method being used has to be filled in. A silkscreen
+            // product needs its designs; an embroidered one needs its stitches.
+            'design_count' => 'required_if:print_type,silkscreen|nullable|integer|min:1|max:50',
+            'extra_design_cost' => 'required_if:print_type,silkscreen|nullable|numeric|min:0',
+            'stitch_count' => 'required_if:print_type,embroidery|nullable|integer|min:1|max:5000000',
+            'cost_per_stitch' => 'required_if:print_type,embroidery|nullable|numeric|min:0',
             'production_cost' => 'nullable|numeric|min:0',
             'sewing_cost' => 'nullable|numeric|min:0',
             'plastic_cost' => 'nullable|numeric|min:0',
@@ -161,7 +167,8 @@ class ProductController extends Controller
 
         return $product->only([
             'sku', 'name', 'product_category_id', 'is_active', 'print_type', 'costing_mode',
-            'printing_cost', 'production_cost', 'sewing_cost', 'plastic_cost', 'box_cost', 'sticker_cost',
+            'printing_cost', 'design_count', 'extra_design_cost', 'stitch_count', 'cost_per_stitch',
+            'production_cost', 'sewing_cost', 'plastic_cost', 'box_cost', 'sticker_cost',
         ]) + [
             'materials' => $product->materials
                 ->mapWithKeys(fn (Material $m) => [$m->sku => (float) $m->pivot->quantity])
