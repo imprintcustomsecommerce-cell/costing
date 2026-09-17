@@ -37,7 +37,7 @@
             <div class="section-title-row">
                 <div>
                     <h3>Materials</h3>
-                    <p class="muted">Choose the fabric, accessories, ribbings, and any other materials needed for one finished piece. At least one ribbing is required.</p>
+                    <p class="muted">Search for the fabric, accessories and ribbings this piece is made of. At least one ribbing is required.</p>
                 </div>
                 <span class="selection-count" id="product-material-count">0 selected</span>
             </div>
@@ -46,9 +46,10 @@
                 <label class="material-search">Search materials
                     <input id="product-material-search" type="search" placeholder="Search by SKU or material name" autocomplete="off">
                 </label>
-                <button type="button" class="btn btn-secondary btn-small" id="product-material-selected">Show selected</button>
+                <button type="button" class="btn btn-secondary btn-small" id="product-material-selected">Show all</button>
             </div>
 
+            <p class="muted" id="product-material-empty" hidden></p>
             <div id="product-material-list">
                 @foreach($preferredMaterialGroups as $groupName)
                     @if($materialGroups->has($groupName))
@@ -324,25 +325,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const search = document.getElementById('product-material-search');
     const onlySelected = document.getElementById('product-material-selected');
-    let selectedOnly = false;
+    const emptyNote = document.getElementById('product-material-empty');
+
+    /* Two hundred material cards is several screens of scrolling to reach the
+       cost steps underneath, and nobody reads a list that long anyway. What a
+       product is made of is a handful of them, so the list starts at what is
+       already picked and searching brings the rest back. */
+    let selectedOnly = true;
 
     function filter() {
         const term = (search?.value || '').trim().toLowerCase();
+        let shown = 0;
+
         for (const row of document.querySelectorAll('.material-line')) {
             const matches = !term || row.dataset.materialSearch.includes(term);
-            const included = !selectedOnly || row.querySelector('input[type="checkbox"]').checked;
+            const ticked = row.querySelector('input[type="checkbox"]').checked;
+            /* A search looks through everything: narrowing to a term and then
+               hiding the answer would be a strange way to find a material. */
+            const included = !selectedOnly || term || ticked;
             row.hidden = !(matches && included);
+            if (!row.hidden) shown++;
         }
+
         for (const group of document.querySelectorAll('[data-material-group]')) {
             group.hidden = ![...group.querySelectorAll('.material-line')].some(row => !row.hidden);
+        }
+
+        if (emptyNote) {
+            emptyNote.hidden = shown > 0;
+            emptyNote.textContent = term
+                ? 'No material matches "' + (search?.value || '').trim() + '".'
+                : 'Nothing picked yet. Search above, or press Show all to browse the catalogue.';
         }
     }
 
     search?.addEventListener('input', filter);
     onlySelected?.addEventListener('click', () => {
         selectedOnly = !selectedOnly;
-        onlySelected.textContent = selectedOnly ? 'Show all' : 'Show selected';
+        onlySelected.textContent = selectedOnly ? 'Show all' : 'Show picked only';
         filter();
+    });
+
+    /* A material ticked while browsing has to stay visible when the list goes
+       back to showing only what is picked. */
+    document.addEventListener('change', e => {
+        if (e.target.matches('.material-line input[type="checkbox"]')) filter();
     });
 
     recalculate();

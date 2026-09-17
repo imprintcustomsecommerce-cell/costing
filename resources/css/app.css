@@ -469,3 +469,43 @@ th{background:#f1f5f9;color:#64748b}tbody tr:hover{background:#f8fbff}.table-lin
 .bulk-result{display:block;margin-top:6px;color:var(--ink);font-size:13px;
     font-variant-numeric:tabular-nums;font-weight:650}
 .current-price{display:block;margin-top:5px;color:var(--muted);font-size:12px}
+
+/* ------------------------------------------------------------------
+   Denser product form
+
+   Nearly two hundred material cards at full size made a page several
+   screens tall, and the cost steps below them were pushed out of sight
+   entirely. The list now scrolls in its own panel, so the four steps
+   stay within reach of one another and the page is about a screen.
+   ------------------------------------------------------------------ */
+#product-material-list{max-height:min(46vh,430px);overflow-y:auto;overscroll-behavior:contain;
+    padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-soft)}
+#product-material-list .choice-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+#product-material-list .material-line{padding:8px 10px;min-height:0;gap:8px}
+#product-material-list .material-line-name{font-size:12px;line-height:1.2}
+#product-material-list .material-line-name em{margin-top:1px;font-size:10px}
+#product-material-list .material-line-tag{margin-top:2px;padding:1px 6px;font-size:9px}
+#product-material-list .material-qty{padding:5px 7px;font-size:12px}
+#product-material-list .material-group+.material-group{margin-top:14px}
+#product-material-list .material-group-title{margin-bottom:7px}
+
+/* The steps themselves, closer together. */
+.cost-step{padding:16px 0 17px;gap:14px}
+.cost-step:not(:last-of-type) .cost-step-number:after{top:50px}
+.cost-step-body .muted{font-size:11.5px}
+.cost-input-grid{margin-top:12px;gap:11px}
+.money-input input{padding:7px 9px}
+.material-picker-tools{margin:11px 0 12px}
+
+/* The summary carries eight figures; at full size it was a screen of
+   its own. */
+.costing-summary{gap:20px 26px;padding:13px 16px;margin:14px 0}
+.costing-summary b{font-size:18px}
+.costing-summary-grand b{font-size:20px}
+@media(max-width:640px){#product-material-list{max-height:none}}
+
+/* The list holds only what is picked until somebody searches, so it no longer
+   needs a fixed height to keep the page short. */
+#product-material-list{max-height:min(38vh,340px)}
+#product-material-empty{margin:0 0 12px;padding:14px;border:1px dashed var(--line-strong);
+    border-radius:10px;background:var(--surface-soft);font-size:12px;text-align:center}
