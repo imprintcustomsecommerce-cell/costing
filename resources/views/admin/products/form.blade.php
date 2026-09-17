@@ -176,7 +176,7 @@
         <div><span>Packaging <em>plastic + box + sticker</em></span><b data-packaging-total>&#8369;0.00</b></div>
         <div class="costing-summary-grand"><span>Base product cost</span><b data-product-total>&#8369;0.00</b></div>
         <div data-area-row hidden><span>Additional material cost / cm&sup2; of print</span><b data-area-total>&#8369;0.0000</b></div>
-        <div><span>Estimated selling price <em>{{ rtrim(rtrim(number_format($margin, 2), '0'), '.') }}% margin</em></span><b data-selling-total>&#8369;0.00</b></div>
+        <div class="costing-summary-price"><span>Estimated selling price <em>{{ rtrim(rtrim(number_format($margin, 2), '0'), '.') }}% margin</em></span><b data-selling-total>&#8369;0.00</b></div>
         <p class="muted" data-costing-note>Select the materials used by this product.</p>
         <p class="muted" data-area-note hidden>Area-based materials are added when the quotation knows the artwork size. The base product cost above already includes printing, labor, and packaging.</p>
     </div>
@@ -351,6 +351,9 @@ document.addEventListener('DOMContentLoaded', () => {
             group.hidden = ![...group.querySelectorAll('.material-line')].some(row => !row.hidden);
         }
 
+        const list = document.getElementById('product-material-list');
+        if (list) list.hidden = shown === 0;
+
         if (emptyNote) {
             emptyNote.hidden = shown > 0;
             emptyNote.textContent = term
@@ -372,6 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.matches('.material-line input[type="checkbox"]')) filter();
     });
 
+    filter();
     recalculate();
 });
 </script>

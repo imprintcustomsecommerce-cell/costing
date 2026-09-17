@@ -509,3 +509,16 @@ th{background:#f1f5f9;color:#64748b}tbody tr:hover{background:#f8fbff}.table-lin
 #product-material-list{max-height:min(38vh,340px)}
 #product-material-empty{margin:0 0 12px;padding:14px;border:1px dashed var(--line-strong);
     border-radius:10px;background:var(--surface-soft);font-size:12px;text-align:center}
+
+/* The product summary, in the order it is read: the four components are
+   working, the base cost is the sum, and the selling price is the answer the
+   form exists to produce. Flat figures made the answer the hardest to find. */
+.costing-summary [data-material-total],
+.costing-summary [data-printing-total],
+.costing-summary [data-labor-total],
+.costing-summary [data-packaging-total],
+.costing-summary [data-area-total]{font-size:15px;color:var(--muted)}
+.costing-summary-grand b{font-size:20px;color:var(--ink)}
+.costing-summary-price{padding-left:18px;border-left:2px solid var(--accent-strong)}
+.costing-summary-price b{font-size:26px;font-weight:800;color:var(--accent-strong)}
+.costing-summary span em{font-style:normal;font-weight:400;text-transform:none;letter-spacing:0}
