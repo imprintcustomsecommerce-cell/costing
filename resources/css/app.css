@@ -355,3 +355,117 @@ th{background:#f1f5f9;color:#64748b}tbody tr:hover{background:#f8fbff}.table-lin
 .row-actions form{display:inline;margin:0}
 .row-actions .is-danger{color:var(--muted);background:none;border:0;padding:0;font:inherit;cursor:pointer}
 .row-actions .is-danger:hover{color:var(--danger);text-decoration:underline}
+
+/* ------------------------------------------------------------------
+   Building a product cost
+
+   The form asks for the cost of a piece in the order it is actually
+   built: materials, then printing, then labour, then packaging. The
+   markup said so with numbered steps and grouped materials, but none
+   of it had any styling, so the page read as one long column of
+   unrelated boxes. These rules give the steps their shape.
+   ------------------------------------------------------------------ */
+
+/* A numbered step. The rail down the left joins them into a sequence
+   rather than four boxes that happen to sit above one another. */
+.cost-step{display:grid;grid-template-columns:38px minmax(0,1fr);gap:16px;
+    position:relative;padding:22px 0 24px}
+.cost-step+.cost-step{border-top:1px solid var(--line)}
+.cost-step-number{display:grid;place-items:center;width:32px;height:32px;margin-top:2px;
+    border-radius:50%;background:var(--accent-soft);color:var(--accent-strong);
+    font-size:13px;font-weight:850;font-variant-numeric:tabular-nums}
+/* The rail stops at the last step: a line running into nothing reads
+   as a step somebody forgot to write. */
+.cost-step:not(:last-of-type) .cost-step-number:after{content:'';position:absolute;
+    top:56px;bottom:-2px;left:15px;width:1px;background:var(--line)}
+.cost-step-body{min-width:0}
+.cost-step-body h3{margin:0 0 4px;font-size:15px}
+.cost-step-body .muted{margin:0;font-size:12px;line-height:1.5}
+@media(max-width:640px){
+    .cost-step{grid-template-columns:1fr;gap:10px}
+    .cost-step-number:after{display:none}
+}
+
+/* The money boxes for one step. */
+.cost-input-grid{margin-top:16px;gap:14px}
+.cost-input-grid label{font-size:12px;color:var(--muted)}
+.cost-input-grid input,.cost-input-grid select{margin-top:5px}
+
+/* A peso box. The sign sits inside the field so the number starts
+   where every other number on the page starts, and the whole thing
+   lights up on focus rather than only the input inside it. */
+.money-input{display:flex;align-items:stretch;margin-top:5px;
+    border:1px solid var(--line);border-radius:8px;background:var(--surface);
+    overflow:hidden;transition:border-color .15s ease,box-shadow .15s ease}
+.money-input:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.money-input>span{display:grid;place-items:center;padding:0 10px;
+    color:var(--muted);background:var(--surface-soft);
+    border-right:1px solid var(--line);font-size:13px}
+.money-input input{width:100%;padding:9px 10px;border:0;border-radius:0;background:none;
+    color:var(--ink);font:inherit;font-variant-numeric:tabular-nums;text-align:right}
+.money-input input:focus{outline:none}
+
+/* Materials, grouped by what they are. With nearly two hundred to
+   choose from, an ungrouped wall of cards is unreadable. */
+.material-group+.material-group{margin-top:20px}
+.material-group-title{display:flex;align-items:center;gap:10px;margin-bottom:10px;
+    color:var(--muted);font-size:10px;font-weight:850;letter-spacing:.09em;text-transform:uppercase}
+.material-group-title:after{content:'';flex:1;height:1px;background:var(--line)}
+
+.material-picker-tools{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:14px 0 16px}
+.material-search{flex:1 1 260px;font-size:12px;color:var(--muted)}
+.material-search input{width:100%;margin-top:5px}
+
+/* How many are ticked, as a running count beside the heading. */
+.selection-count{padding:4px 10px;border-radius:999px;
+    color:var(--accent-strong);background:var(--accent-soft);
+    font-size:11px;font-weight:750;white-space:nowrap}
+
+.section-title-row{display:flex;flex-wrap:wrap;align-items:start;justify-content:space-between;gap:12px}
+
+/* ------------------------------------------------------------------
+   Working a unit cost out from a supplier invoice
+
+   A cost is stored per unit but bought by the roll, box or pack, and
+   doing that division by hand is where the wrong figure gets typed.
+   The helper had markup and no styling at all, so the thing meant to
+   prevent a costly mistake looked like stray inputs under the form.
+   ------------------------------------------------------------------ */
+.cost-helper{grid-column:1/-1;margin:4px 0 6px;padding:15px 16px;
+    border:1px dashed var(--line-strong);border-radius:11px;background:var(--surface-soft)}
+.cost-helper-intro{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.5}
+.cost-helper-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.cost-helper-fields label{font-size:12px;color:var(--muted)}
+.cost-helper-fields input{width:100%;margin-top:5px}
+.cost-helper-note{display:block;margin-top:5px;color:var(--muted);font-size:11px;line-height:1.4}
+.cost-helper-optional{margin-left:5px;color:var(--muted);font-size:11px;font-weight:400}
+
+/* The arithmetic, shown rather than hidden: somebody has to be able to
+   see that 1,530 over 1,000 is what produced the figure in the box. */
+.cost-helper-working{margin:12px 0 0;padding-top:11px;border-top:1px solid var(--line);
+    color:var(--ink);font-size:13px;font-variant-numeric:tabular-nums}
+.cost-helper-yield{margin:5px 0 0;color:var(--muted);font-size:12px}
+
+/* Uploading artwork, one row per print location. */
+.artwork-upload-row{align-items:end;padding:13px;margin-bottom:10px;
+    border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.artwork-upload-row:focus-within{border-color:var(--accent)}
+.artwork-upload-row label{font-size:12px;color:var(--muted)}
+.artwork-upload-row input{width:100%;margin-top:5px}
+.artwork-row-remove{align-self:center}
+
+/* The last line of the product summary: what a finished piece costs,
+   before the margin turns it into a price. */
+.costing-summary-grand{padding-left:18px;border-left:2px solid var(--accent)}
+.costing-summary-grand b{font-size:24px}
+
+/* The invitation on the dashboard for staff who only quote. */
+.staff-dashboard-card{border-left:3px solid var(--accent)}
+.staff-dashboard-card h2{margin:0 0 6px;font-size:17px}
+.staff-dashboard-card .muted{margin:0 0 14px;font-size:13px}
+
+/* Material pricing: which of the two ways this material is priced. */
+.price-choice{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.bulk-result{display:block;margin-top:6px;color:var(--ink);font-size:13px;
+    font-variant-numeric:tabular-nums;font-weight:650}
+.current-price{display:block;margin-top:5px;color:var(--muted);font-size:12px}
