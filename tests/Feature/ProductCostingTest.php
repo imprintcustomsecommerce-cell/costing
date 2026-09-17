@@ -46,6 +46,19 @@ class ProductCostingTest extends TestCase
         return $material;
     }
 
+    /** A garment cannot be saved without one, so a form test needs one. */
+    private function ribbing(string $sku = 'RIB-TEST', float $cost = 0): Material
+    {
+        $material = Material::create([
+            'sku' => $sku, 'name' => $sku.' ribbing', 'unit' => 'piece',
+            'material_category_id' => MaterialCategory::firstOrCreate(['name' => 'Ribbings'])->id,
+            'waste_percentage' => 0, 'is_active' => true,
+        ]);
+        $material->forceFill(['current_cost' => $cost])->save();
+
+        return $material;
+    }
+
     public function test_a_product_costs_its_materials_times_their_quantities(): void
     {
         $blank = $this->material('TEE-BLANK', bulk: 65, retail: 80);
@@ -95,7 +108,7 @@ class ProductCostingTest extends TestCase
             'sku' => 'QTY-TEE', 'name' => 'Quantity Tee',
             'product_category_id' => $category->id,
             'print_type' => 'dtf', 'printing_cost' => 5,
-            'materials' => [$blank->id],
+            'materials' => [$blank->id, $this->ribbing()->id],
             'material_quantities' => [$blank->id => 3],
         ])->assertSessionHasNoErrors()->assertRedirect();
 
@@ -115,7 +128,7 @@ class ProductCostingTest extends TestCase
             'sku' => 'NO-QTY', 'name' => 'No Quantity',
             'product_category_id' => $category->id,
             'print_type' => 'dtf', 'printing_cost' => 5,
-            'materials' => [$blank->id],
+            'materials' => [$blank->id, $this->ribbing()->id],
         ])->assertSessionHasNoErrors();
 
         $product = Product::where('sku', 'NO-QTY')->sole();
@@ -388,7 +401,7 @@ class ProductCostingTest extends TestCase
         $this->post('/admin/products', [
             'sku' => 'BREAKDOWN-TEE', 'name' => 'Breakdown Tee',
             'product_category_id' => $category->id,
-            'materials' => [$fabric->id],
+            'materials' => [$fabric->id, $this->ribbing()->id],
             'material_quantities' => [$fabric->id => 1],
             'print_type' => 'silkscreen',
             'printing_cost' => 25,
@@ -410,4 +423,62 @@ class ProductCostingTest extends TestCase
         $this->assertEqualsWithDelta(164.00, $costing['retail'], 0.001);
     }
 
+    public function test_a_product_cannot_be_saved_without_a_ribbing(): void
+    {
+        $this->admin();
+        $fabric = $this->material('NORIB-FABRIC', bulk: 65);
+        $this->ribbing();
+
+        // Collar, cuffs and waistband are as much a part of the piece as the
+        // fabric. A recipe that leaves them out quotes a shirt at less than it
+        // costs to make.
+        $this->post('/admin/products', [
+            'sku' => 'NORIB', 'name' => 'No ribbing',
+            'product_category_id' => ProductCategory::firstOrCreate(['slug' => 'apparel'], ['name' => 'Apparel'])->id,
+            'print_type' => 'dtf', 'printing_cost' => 5,
+            'materials' => [$fabric->id],
+        ])->assertSessionHasErrors('materials');
+
+        $this->assertSame(0, Product::where('sku', 'NORIB')->count());
+    }
+
+    public function test_any_ribbing_satisfies_the_rule(): void
+    {
+        $this->admin();
+        $fabric = $this->material('RIB-OK-FABRIC', bulk: 65);
+        $cuff = $this->ribbing('RIB-CUFF-X');
+
+        // The check is on the category, so a ribbing added to the catalogue
+        // tomorrow counts without anybody changing the rule.
+        $this->post('/admin/products', [
+            'sku' => 'RIB-OK', 'name' => 'With ribbing',
+            'product_category_id' => ProductCategory::firstOrCreate(['slug' => 'apparel'], ['name' => 'Apparel'])->id,
+            'print_type' => 'dtf', 'printing_cost' => 5,
+            'materials' => [$fabric->id, $cuff->id],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(1, Product::where('sku', 'RIB-OK')->count());
+    }
+
+    public function test_a_product_cannot_be_saved_with_no_materials_at_all(): void
+    {
+        $this->admin();
+
+        $this->post('/admin/products', [
+            'sku' => 'HOLLOW', 'name' => 'Hollow',
+            'product_category_id' => ProductCategory::firstOrCreate(['slug' => 'apparel'], ['name' => 'Apparel'])->id,
+            'print_type' => 'dtf', 'printing_cost' => 5,
+        ])->assertSessionHasErrors('materials');
+    }
+
+    public function test_the_form_says_a_ribbing_is_required(): void
+    {
+        $this->admin();
+        $this->ribbing();
+
+        $this->get('/admin/products/create')
+            ->assertOk()
+            ->assertSee('Ribbings')
+            ->assertSee('At least one ribbing is required');
+    }
 }

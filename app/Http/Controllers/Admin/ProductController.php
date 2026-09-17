@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Material;
+use App\Models\MaterialCategory;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Support\ProductionPipeline;
@@ -90,11 +91,39 @@ class ProductController extends Controller
             'box_cost' => 'nullable|numeric|min:0',
             'sticker_cost' => 'nullable|numeric|min:0',
             'is_active' => 'nullable|boolean',
-            'materials' => 'nullable|array',
+            'materials' => ['required', 'array', 'min:1', $this->ribbingRule()],
             'materials.*' => 'exists:materials,id',
             'material_quantities' => 'nullable|array',
             'material_quantities.*' => 'nullable|numeric|min:0',
         ]);
+    }
+
+    /**
+     * A garment is not finished without its ribbing.
+     *
+     * Collar, cuffs and waistband are as much a part of the piece as the
+     * fabric, and a recipe that leaves them out quotes a shirt at less than it
+     * costs to make. The check is on the category rather than on particular
+     * materials, so adding a new ribbing to the catalogue needs no change
+     * here.
+     */
+    private function ribbingRule(): \Closure
+    {
+        return function (string $attribute, $value, \Closure $fail) {
+            $ribbings = MaterialCategory::where('name', 'Ribbings')->value('id');
+
+            if (! $ribbings) {
+                return;
+            }
+
+            $hasRibbing = Material::whereIn('id', (array) $value)
+                ->where('material_category_id', $ribbings)
+                ->exists();
+
+            if (! $hasRibbing) {
+                $fail('Pick at least one Ribbings material: a garment is costed with its collar, cuffs or waistband, not without them.');
+            }
+        };
     }
 
     /**

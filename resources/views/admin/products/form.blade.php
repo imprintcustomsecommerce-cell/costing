@@ -37,7 +37,7 @@
             <div class="section-title-row">
                 <div>
                     <h3>Materials</h3>
-                    <p class="muted">Choose the fabric, accessories, ribbings, and any other materials needed for one finished piece.</p>
+                    <p class="muted">Choose the fabric, accessories, ribbings, and any other materials needed for one finished piece. At least one ribbing is required.</p>
                 </div>
                 <span class="selection-count" id="product-material-count">0 selected</span>
             </div>
@@ -53,7 +53,10 @@
                 @foreach($preferredMaterialGroups as $groupName)
                     @if($materialGroups->has($groupName))
                         <section class="material-group" data-material-group>
-                            <div class="material-group-title">{{ $groupName }}</div>
+                            <div class="material-group-title">{{ $groupName }}@if($groupName === 'Ribbings') <span class="field-required">required</span>@endif</div>
+                            @if($groupName === 'Ribbings')
+                                <p class="muted" style="margin:0 0 10px;font-size:12px">A garment is costed with its collar, cuffs or waistband. Pick at least one.</p>
+                            @endif
                             <div class="choice-grid">
                                 @foreach($materialGroups->get($groupName) as $material)
                                     @include('admin.products.material-line', ['material' => $material, 'recipe' => $recipe, 'selectedMaterials' => $selectedMaterials])
