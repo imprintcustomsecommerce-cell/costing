@@ -91,8 +91,8 @@ if not errorlevel 1 set RUNNING=1
 if defined RUNNING (
     echo Already running on port %PORT%. Opening the browser.
 ) else (
-    start "Imprint Customs Server" /D "%~dp0" cmd /k ""%PHPBIN%" artisan serve --host=%HOST% --port=%PORT%"
-    timeout /t 3 /nobreak >nul
+    start "Imprint Customs Server" /D "%~dp0" cmd /k "%~dp0serve.bat"
+    "%SystemRoot%\System32\timeout.exe" /t 3 /nobreak >nul 2>&1
 )
 
 start "" "%APPURL%"
