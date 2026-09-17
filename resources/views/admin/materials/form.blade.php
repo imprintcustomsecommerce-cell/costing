@@ -17,7 +17,11 @@
         <label data-roll-size>Roll/sheet length (cm)<input name="length_cm" type="number" step=".0001" min=".0001" value="{{ old('length_cm',$material->length_cm) }}"></label>
         <label>Consumed per m² of print <span class="muted small">optional</span><input name="coverage_per_sqm" type="number" step=".0001" min="0" value="{{ old('coverage_per_sqm',$material->coverage_per_sqm) }}"></label>
     </div>
-    <input type="hidden" name="is_active" value="1">
+    <label class="choice-card" style="margin:14px 0">
+        <input type="hidden" name="is_active" value="0">
+        <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $material->exists ? $material->is_active : true))>
+        <span>Active &mdash; offered when building a product</span>
+    </label>
 
     @if($material->exists)
         <div class="current-price"><span>Current quotation cost / <span data-unit-label>unit</span></span><b>{{ $material->effectiveCostToday() === null ? 'Not set' : '₱'.number_format($material->effectiveCostToday(),4) }}</b><span class="muted">{{ $material->retail_cost !== null ? 'Retail price' : 'Bulk price' }}</span></div>

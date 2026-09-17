@@ -182,7 +182,11 @@
     </div>
 
     <label class="field-block">Description<textarea name="description">{{ old('description',$product->description) }}</textarea></label>
-    <input type="hidden" name="is_active" value="1">
+    <label class="choice-card" style="margin-bottom:16px">
+        <input type="hidden" name="is_active" value="0">
+        <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $product->exists ? $product->is_active : true))>
+        <span>Active &mdash; offered when creating a quotation</span>
+    </label>
 
     <div class="form-actions">
         <button class="btn">Save product</button>

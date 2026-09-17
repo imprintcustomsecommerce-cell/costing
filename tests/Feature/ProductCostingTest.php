@@ -585,4 +585,42 @@ class ProductCostingTest extends TestCase
             'sku' => 'REQ-SUB', 'name' => 'Sub', 'print_type' => 'full_sublimation',
         ])->assertSessionHasNoErrors();
     }
+
+    public function test_a_product_can_be_retired(): void
+    {
+        $this->admin();
+        $fabric = $this->material('RETIRE-FABRIC', bulk: 65);
+        $product = Product::create([
+            'sku' => 'RETIRE', 'name' => 'Retire me', 'is_active' => true,
+            'costing_mode' => 'product_breakdown', 'print_type' => 'dtf', 'printing_cost' => 5,
+            'product_category_id' => ProductCategory::firstOrCreate(['slug' => 'apparel'], ['name' => 'Apparel'])->id,
+        ]);
+        $product->materials()->sync([$fabric->id => ['quantity' => 1], $this->ribbing()->id => ['quantity' => 1]]);
+
+        // The status column used to be the only place a product could be
+        // called inactive, and nothing could ever put it there.
+        $this->put('/admin/products/'.$product->id, [
+            'sku' => 'RETIRE', 'name' => 'Retire me',
+            'product_category_id' => $product->product_category_id,
+            'print_type' => 'dtf', 'printing_cost' => 5,
+            'materials' => $product->materials->pluck('id')->all(),
+            'is_active' => 0,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertFalse((bool) $product->fresh()->is_active);
+    }
+
+    public function test_a_retired_product_is_not_offered_for_quoting(): void
+    {
+        $this->admin();
+        $fabric = $this->material('GONE-FABRIC', bulk: 65, retail: 65);
+        $product = Product::create([
+            'sku' => 'GONE', 'name' => 'Gone', 'is_active' => false,
+            'costing_mode' => 'product_breakdown', 'print_type' => 'dtf', 'printing_cost' => 5,
+            'product_category_id' => ProductCategory::firstOrCreate(['slug' => 'apparel'], ['name' => 'Apparel'])->id,
+        ]);
+        $product->materials()->sync([$fabric->id => ['quantity' => 1]]);
+
+        $this->get('/quotations/create')->assertOk()->assertDontSee('GONE');
+    }
 }

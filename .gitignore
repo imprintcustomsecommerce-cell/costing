@@ -22,3 +22,7 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Build archives. 125 MB of zips was committed here once; they belong in a
+# release, not in every clone of the source.
+/dist
